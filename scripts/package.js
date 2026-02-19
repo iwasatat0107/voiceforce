@@ -8,7 +8,7 @@ const SRC_DIR = path.resolve(__dirname, '..');
 const DIST_DIR = path.resolve(SRC_DIR, 'dist');
 const packageJson = JSON.parse(fs.readFileSync(path.join(SRC_DIR, 'package.json'), 'utf8'));
 const version = packageJson.version;
-const outputFile = path.join(SRC_DIR, `dist/salesforce-voice-assistant-v${version}.zip`);
+const outputFile = path.join(SRC_DIR, `dist/voiceforce-v${version}.zip`);
 
 if (!fs.existsSync(DIST_DIR)) {
   console.error('dist/ が見つかりません。先に npm run build を実行してください。');

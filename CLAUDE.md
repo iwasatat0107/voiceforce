@@ -16,6 +16,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 詳細仕様は `DESIGN_DOC.md` に記載。**実装は DESIGN_DOC.md の Step 1〜16 の順に TDD で進める。**
 
+GitHub リポジトリ: **https://github.com/iwasatatm4/voiceforce**（Public）
+
+---
+
+## GitHub MCP での開発方針
+
+**このプロジェクトは GitHub MCP を使って開発する。**
+
+コンテキスト節約のため、以下の操作は GitHub MCP のツールで行う（`gh` CLI や Bash は使わない）。
+
+| 操作 | 使用するツール |
+|------|-------------|
+| リポジトリ作成・設定 | `mcp__github__create_repository` |
+| Issue 作成・参照 | `mcp__github__create_issue` / `mcp__github__get_issue` |
+| PR 作成・マージ | `mcp__github__create_pull_request` / `mcp__github__merge_pull_request` |
+| ファイルのコミット・プッシュ | `mcp__github__push_files` / `mcp__github__create_or_update_file` |
+| ブランチ作成 | `mcp__github__create_branch` |
+| CI ステータス確認 | `mcp__github__get_pull_request` / `mcp__github__list_workflow_runs` |
+
+**各 Step の完了時フロー（GitHub MCP）:**
+1. feature ブランチに push（`mcp__github__push_files`）
+2. PR を作成（`mcp__github__create_pull_request`）
+3. CI 通過を確認
+4. develop にマージ（`mcp__github__merge_pull_request`）
+
 ---
 
 ## 開発コマンド

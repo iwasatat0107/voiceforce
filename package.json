@@ -1,5 +1,5 @@
 {
-  "name": "salesforce-voice-assistant",
+  "name": "voiceforce",
   "version": "0.1.0",
   "description": "Salesforceを音声で操作するChrome拡張機能",
   "private": true,
