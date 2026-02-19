@@ -1,0 +1,26 @@
+{
+  "name": "salesforce-voice-assistant",
+  "version": "0.1.0",
+  "description": "Salesforceを音声で操作するChrome拡張機能",
+  "private": true,
+  "scripts": {
+    "test": "jest --coverage",
+    "test:unit": "jest __tests__/unit/",
+    "test:integration": "jest __tests__/integration/",
+    "test:e2e": "jest __tests__/e2e/",
+    "test:prompt": "jest __tests__/prompt/ --testTimeout=30000",
+    "test:watch": "jest --watch",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "build": "node scripts/build.js",
+    "package": "node scripts/package.js"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
