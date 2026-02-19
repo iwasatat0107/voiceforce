@@ -85,23 +85,51 @@
       margin-top: 8px;
     }
 
-    .shortcut-hint {
+    .shortcut-section {
       margin-top: 16px;
       padding: 10px;
       background: #f3f4f6;
       border-radius: 6px;
-      font-size: 12px;
-      color: #6b7280;
-      text-align: center;
     }
 
-    kbd {
-      background: #e5e7eb;
-      border-radius: 3px;
-      padding: 1px 5px;
-      font-family: monospace;
-      font-size: 11px;
+    .shortcut-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 8px;
     }
+
+    .shortcut-key {
+      background: #e5e7eb;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #1d1d1f;
+      font-weight: 600;
+    }
+
+    .shortcut-key.unset {
+      color: #9ca3af;
+      font-weight: 400;
+      font-family: inherit;
+    }
+
+    .btn-secondary {
+      width: 100%;
+      padding: 6px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 500;
+      color: #374151;
+      cursor: pointer;
+    }
+
+    .btn-secondary:hover { background: #f9fafb; }
   </style>
 </head>
 <body>
@@ -120,8 +148,12 @@
     <button id="disconnect-btn" class="btn-danger" style="display:none;">接続を解除</button>
   </div>
 
-  <div class="shortcut-hint">
-    ショートカット: <kbd>Ctrl+Shift+V</kbd>（Mac: <kbd>⌘+Shift+V</kbd>）
+  <div class="shortcut-section">
+    <div class="shortcut-row">
+      <span>音声入力ショートカット</span>
+      <span id="shortcut-key" class="shortcut-key unset">読み込み中...</span>
+    </div>
+    <button id="customize-shortcut-btn" class="btn-secondary">ショートカットをカスタマイズ</button>
   </div>
 
   <script src="popup.js"></script>

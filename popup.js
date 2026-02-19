@@ -41,3 +41,20 @@ disconnectBtn.addEventListener('click', () => {
 });
 
 loadStatus();
+
+// 現在のショートカットキーを動的に表示
+chrome.commands.getAll((commands) => {
+  const cmd = commands.find(c => c.name === 'toggle-voice');
+  const el = document.getElementById('shortcut-key');
+  if (cmd && cmd.shortcut) {
+    el.textContent = cmd.shortcut;
+    el.classList.remove('unset');
+  } else {
+    el.textContent = '未設定';
+  }
+});
+
+// chrome://extensions/shortcuts を開いてカスタマイズ画面へ誘導
+document.getElementById('customize-shortcut-btn').addEventListener('click', () => {
+  chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+});
