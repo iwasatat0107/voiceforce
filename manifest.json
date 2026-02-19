@@ -45,6 +45,9 @@
   },
   "commands": {
     "toggle-voice": {
+      "suggested_key": {
+        "default": "Alt+V"
+      },
       "description": "音声入力のON/OFF切り替え"
     }
   },

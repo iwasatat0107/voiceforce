@@ -24,8 +24,8 @@ describe('manifest.json', () => {
   test('toggle-voice コマンドが定義されている', () => {
     expect(manifest.commands['toggle-voice']).toBeDefined();
     expect(manifest.commands['toggle-voice'].description).toBe('音声入力のON/OFF切り替え');
-    // ショートカットキーはユーザーが chrome://extensions/shortcuts で自由に設定する（デフォルトなし）
-    expect(manifest.commands['toggle-voice'].suggested_key).toBeUndefined();
+    // デフォルトは Alt+V（Mac: Option+V）。chrome://extensions/shortcuts でカスタマイズ可能
+    expect(manifest.commands['toggle-voice'].suggested_key.default).toBe('Alt+V');
   });
 
   test('permissions に必要なものが含まれている', () => {
