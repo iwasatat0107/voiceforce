@@ -1,0 +1,41 @@
+{
+  "extName": {
+    "message": "Salesforce Voice Assistant"
+  },
+  "extDescription": {
+    "message": "Salesforceを音声で操作するChrome拡張機能"
+  },
+  "toggleVoiceDescription": {
+    "message": "音声入力のON/OFF切り替え"
+  },
+  "statusConnected": {
+    "message": "接続済み"
+  },
+  "statusDisconnected": {
+    "message": "未接続"
+  },
+  "connectButton": {
+    "message": "Salesforceに接続"
+  },
+  "disconnectButton": {
+    "message": "接続を解除"
+  },
+  "listening": {
+    "message": "聞いています..."
+  },
+  "processing": {
+    "message": "解析中..."
+  },
+  "confirmTitle": {
+    "message": "確認"
+  },
+  "completeTitle": {
+    "message": "完了"
+  },
+  "errorTitle": {
+    "message": "エラー"
+  },
+  "undoButton": {
+    "message": "元に戻す"
+  }
+}

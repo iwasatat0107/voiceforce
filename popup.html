@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Salesforce Voice Assistant</title>
+  <style>
+    body {
+      width: 320px;
+      min-height: 200px;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      color: #1d1d1f;
+    }
+
+    h1 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0 0 16px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-badge.connected {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .status-badge.disconnected {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .status-badge.connected .status-dot { background: #10b981; }
+    .status-badge.disconnected .status-dot { background: #ef4444; }
+
+    .instance-url {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+      word-break: break-all;
+    }
+
+    .section {
+      margin-top: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    button:hover { opacity: 0.85; }
+
+    .btn-primary {
+      background: #0066cc;
+      color: #fff;
+    }
+
+    .btn-danger {
+      background: #fee2e2;
+      color: #991b1b;
+      margin-top: 8px;
+    }
+
+    .shortcut-hint {
+      margin-top: 16px;
+      padding: 10px;
+      background: #f3f4f6;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #6b7280;
+      text-align: center;
+    }
+
+    kbd {
+      background: #e5e7eb;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: monospace;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎤 Voice Assistant</h1>
+
+  <div id="status-section">
+    <div id="status-badge" class="status-badge disconnected">
+      <span class="status-dot"></span>
+      <span id="status-text">未接続</span>
+    </div>
+    <div id="instance-url" class="instance-url" style="display:none;"></div>
+  </div>
+
+  <div class="section">
+    <button id="connect-btn" class="btn-primary">Salesforceに接続</button>
+    <button id="disconnect-btn" class="btn-danger" style="display:none;">接続を解除</button>
+  </div>
+
+  <div class="shortcut-hint">
+    ショートカット: <kbd>Ctrl+Shift+V</kbd>（Mac: <kbd>⌘+Shift+V</kbd>）
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
