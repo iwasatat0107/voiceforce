@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 詳細仕様は `DESIGN_DOC.md` に記載。**実装は DESIGN_DOC.md の Step 1〜16 の順に TDD で進める。**
 
-GitHub リポジトリ: **https://github.com/iwasatatm4/voiceforce**（Public）
+GitHub リポジトリ: **https://github.com/iwasatat0107/voiceforce**（Public）
 
 ---
 
@@ -276,7 +276,7 @@ release/v0.1.0
 DESIGN_DOC.md §22 に詳細な実装手順が記載されている。各Stepは TDD で実装し、PRを develop にマージしてから次のStepに進む。
 
 | Phase | Step | ブランチ | 主な実装 |
-|-------|------|---------|---------|
+|-------|------|---------|--------|
 | 1-A | 1 | step01-project-init | 基盤構築、manifest.json、CI |
 | 1-A | 2 | step02-oauth | `lib/auth.js`（OAuth + AES-256） |
 | 1-A | 3 | step03-metadata | `lib/metadataManager.js` |

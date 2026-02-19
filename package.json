@@ -6,8 +6,8 @@
   "scripts": {
     "test": "jest --coverage",
     "test:unit": "jest __tests__/unit/",
-    "test:integration": "jest __tests__/integration/",
-    "test:e2e": "jest __tests__/e2e/",
+    "test:integration": "jest __tests__/integration/ --passWithNoTests",
+    "test:e2e": "jest __tests__/e2e/ --passWithNoTests",
     "test:prompt": "jest __tests__/prompt/ --testTimeout=30000",
     "test:watch": "jest --watch",
     "lint": "eslint .",
