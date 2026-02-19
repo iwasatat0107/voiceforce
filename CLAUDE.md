@@ -246,13 +246,32 @@ scope: auth, metadata, speech, rule-engine, intent, record-resolver,
 ## Gitワークフロー（Git Flow）
 
 ```
-main          ← Chrome Web Store公開版（developからのみマージ）
+main          ← Chrome Web Store公開版（release/* からのみマージ）
   ↑
 develop       ← 開発統合ブランチ
   ↑
 feature/*     ← 各Step実装（developから作成）
 hotfix/*      ← 緊急修正（main + developにマージ）
 release/*     ← リリース準備（develop → main）
+```
+
+### develop → main マージタイミング
+
+**develop を main にマージするのは以下の2回のみ。**
+
+| タイミング | ブランチ | 条件 | 目的 |
+|-----------|---------|------|------|
+| **Step 9 完了後** | `release/v0.0.1-beta` | Phase 1-A〜1-C 完了（音声→LLM→Salesforce の基本フローが動く） | 限定テスト配布・社内確認 |
+| **Step 16 完了後** | `release/v0.1.0` | 全Step完了・プライバシーポリシー公開済み | Chrome Web Store 正式提出 |
+
+**release ブランチのフロー（GitHub MCP）:**
+```
+1. develop から release/vX.X.X を作成（mcp__github__create_branch）
+2. release/vX.X.X → main への PR を作成（mcp__github__create_pull_request）
+3. CI 通過を確認
+4. main にマージ（mcp__github__merge_pull_request）
+5. release/vX.X.X → develop にも逆マージ（差分がある場合）
+6. main に tag vX.X.X を打つ
 ```
 
 ### ブランチ命名
@@ -266,6 +285,7 @@ feature/step05-widget-ui         feature/step13-error-handling
 feature/step06-rule-engine       feature/step14-test-verification
 feature/step07-salesforce-api    feature/step15-privacy-policy
 feature/step08-cloudflare-worker feature/step16-store-release
+release/v0.0.1-beta
 release/v0.1.0
 ```
 
