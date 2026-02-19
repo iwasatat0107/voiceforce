@@ -16,6 +16,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 詳細仕様は `DESIGN_DOC.md` に記載。**実装は DESIGN_DOC.md の Step 1〜16 の順に TDD で進める。**
 
+GitHub リポジトリ: **https://github.com/iwasatat0107/voiceforce**（Public）
+
+---
+
+## GitHub MCP での開発方針
+
+**このプロジェクトは GitHub MCP を使って開発する。**
+
+コンテキスト節約のため、以下の操作は GitHub MCP のツールで行う（`gh` CLI や Bash は使わない）。
+
+| 操作 | 使用するツール |
+|------|-------------|
+| リポジトリ作成・設定 | `mcp__github__create_repository` |
+| Issue 作成・参照 | `mcp__github__create_issue` / `mcp__github__get_issue` |
+| PR 作成・マージ | `mcp__github__create_pull_request` / `mcp__github__merge_pull_request` |
+| ファイルのコミット・プッシュ | `mcp__github__push_files` / `mcp__github__create_or_update_file` |
+| ブランチ作成 | `mcp__github__create_branch` |
+| CI ステータス確認 | `mcp__github__get_pull_request` / `mcp__github__list_workflow_runs` |
+
+**各 Step の完了時フロー（GitHub MCP）:**
+1. feature ブランチに push（`mcp__github__push_files`）
+2. PR を作成（`mcp__github__create_pull_request`）
+3. CI 通過を確認
+4. develop にマージ（`mcp__github__merge_pull_request`）
+
 ---
 
 ## 開発コマンド
@@ -221,13 +246,32 @@ scope: auth, metadata, speech, rule-engine, intent, record-resolver,
 ## Gitワークフロー（Git Flow）
 
 ```
-main          ← Chrome Web Store公開版（developからのみマージ）
+main          ← Chrome Web Store公開版（release/* からのみマージ）
   ↑
 develop       ← 開発統合ブランチ
   ↑
 feature/*     ← 各Step実装（developから作成）
 hotfix/*      ← 緊急修正（main + developにマージ）
 release/*     ← リリース準備（develop → main）
+```
+
+### develop → main マージタイミング
+
+**develop を main にマージするのは以下の2回のみ。**
+
+| タイミング | ブランチ | 条件 | 目的 |
+|-----------|---------|------|------|
+| **Step 9 完了後** | `release/v0.0.1-beta` | Phase 1-A〜1-C 完了（音声→LLM→Salesforce の基本フローが動く） | 限定テスト配布・社内確認 |
+| **Step 16 完了後** | `release/v0.1.0` | 全Step完了・プライバシーポリシー公開済み | Chrome Web Store 正式提出 |
+
+**release ブランチのフロー（GitHub MCP）:**
+```
+1. develop から release/vX.X.X を作成（mcp__github__create_branch）
+2. release/vX.X.X → main への PR を作成（mcp__github__create_pull_request）
+3. CI 通過を確認
+4. main にマージ（mcp__github__merge_pull_request）
+5. release/vX.X.X → develop にも逆マージ（差分がある場合）
+6. main に tag vX.X.X を打つ
 ```
 
 ### ブランチ命名
@@ -241,6 +285,7 @@ feature/step05-widget-ui         feature/step13-error-handling
 feature/step06-rule-engine       feature/step14-test-verification
 feature/step07-salesforce-api    feature/step15-privacy-policy
 feature/step08-cloudflare-worker feature/step16-store-release
+release/v0.0.1-beta
 release/v0.1.0
 ```
 
@@ -251,7 +296,7 @@ release/v0.1.0
 DESIGN_DOC.md §22 に詳細な実装手順が記載されている。各Stepは TDD で実装し、PRを develop にマージしてから次のStepに進む。
 
 | Phase | Step | ブランチ | 主な実装 |
-|-------|------|---------|---------|
+|-------|------|---------|--------|
 | 1-A | 1 | step01-project-init | 基盤構築、manifest.json、CI |
 | 1-A | 2 | step02-oauth | `lib/auth.js`（OAuth + AES-256） |
 | 1-A | 3 | step03-metadata | `lib/metadataManager.js` |
