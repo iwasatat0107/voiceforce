@@ -48,19 +48,6 @@ const mockOpportunityDescribe = {
   ],
 };
 
-const mockContactDescribe = {
-  name: 'Contact',
-  label: '取引先責任者',
-  fields: [
-    { name: 'Id', label: 'レコードID', type: 'id', createable: false, updateable: false, nillable: true, picklistValues: [] },
-    { name: 'LastName', label: '姓', type: 'string', createable: true, updateable: true, nillable: false, picklistValues: [] },
-    { name: 'FirstName', label: '名', type: 'string', createable: true, updateable: true, nillable: true, picklistValues: [] },
-    { name: 'Email', label: 'メール', type: 'email', createable: true, updateable: true, nillable: true, picklistValues: [] },
-    { name: 'CreatedById', label: '作成者ID', type: 'reference', createable: false, updateable: false, nillable: true, picklistValues: [] },
-    { name: 'IsDeleted', label: '削除済み', type: 'boolean', createable: false, updateable: false, nillable: false, picklistValues: [] },
-  ],
-};
-
 describe('lib/metadataManager.js', () => {
   beforeEach(() => {
     jest.clearAllMocks();
