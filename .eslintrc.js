@@ -22,7 +22,9 @@ module.exports = {
   },
   globals: {
     chrome: 'readonly',
-    webkitSpeechRecognition: 'readonly'
+    webkitSpeechRecognition: 'readonly',
+    module: 'writable',         // lib/*.js の CommonJS 互換エクスポートパターン
+    importScripts: 'readonly'   // Service Worker の importScripts()
   },
   overrides: [
     {
