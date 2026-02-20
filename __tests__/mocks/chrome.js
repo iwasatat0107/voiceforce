@@ -35,7 +35,8 @@ const chromeMock = {
     }
   },
   identity: {
-    launchWebAuthFlow: jest.fn()
+    launchWebAuthFlow: jest.fn(),
+    getRedirectURL: jest.fn((path) => `https://test.chromiumapp.org/${path}`)
   },
   tabs: {
     update: jest.fn(),
@@ -48,7 +49,9 @@ const chromeMock = {
       addListener: jest.fn(),
       removeListener: jest.fn()
     },
-    getURL: jest.fn((path) => `chrome-extension://test-extension-id/${path}`)
+    getURL: jest.fn((path) => `chrome-extension://test-extension-id/${path}`),
+    id: 'test-extension-id',
+    lastError: null
   },
   commands: {
     onCommand: {
