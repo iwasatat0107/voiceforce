@@ -1,29 +1,43 @@
 'use strict';
 
 // Service Worker: 認証管理・メッセージルーティング・トークンリフレッシュ
-// 各機能は Step 2（auth）以降で実装する
+// lib/auth.js を importScripts で読み込む（MV3 Classic Service Worker）
+importScripts('lib/auth.js');
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   switch (message.type) {
-    case 'CONNECT_SALESFORCE':
-      // Step 2 で lib/auth.js を使って実装
-      console.warn('CONNECT_SALESFORCE: not implemented yet');
-      sendResponse({ success: false, error: 'not implemented' });
-      break;
+    case 'CONNECT_SALESFORCE': {
+      const { clientId, instanceUrl } = message;
+      startOAuth(clientId, instanceUrl)
+        .then(() => sendResponse({ success: true }))
+        .catch((err) => sendResponse({ success: false, error: err.message }));
+      return true; // 非同期レスポンスのため
+    }
 
     case 'DISCONNECT_SALESFORCE':
-      // Step 2 で lib/auth.js を使って実装
-      console.warn('DISCONNECT_SALESFORCE: not implemented yet');
-      sendResponse({ success: false, error: 'not implemented' });
-      break;
+      disconnect()
+        .then(() => sendResponse({ success: true }))
+        .catch((err) => sendResponse({ success: false, error: err.message }));
+      return true;
+
+    case 'GET_STATUS':
+      isConnected()
+        .then((connected) => getInstanceUrl().then((url) => ({ connected, instanceUrl: url })))
+        .then((status) => sendResponse({ success: true, ...status }))
+        .catch((err) => sendResponse({ success: false, error: err.message }));
+      return true;
+
+    case 'GET_VALID_TOKEN':
+      getValidToken()
+        .then((token) => sendResponse({ success: true, token }))
+        .catch((err) => sendResponse({ success: false, error: err.message }));
+      return true;
 
     default:
       console.warn('Unknown message type:', message.type);
       sendResponse({ success: false, error: 'unknown message type' });
+      return false;
   }
-
-  // 非同期レスポンスのために true を返す
-  return true;
 });
 
 chrome.commands.onCommand.addListener((command) => {
