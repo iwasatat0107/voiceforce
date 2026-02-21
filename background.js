@@ -4,10 +4,21 @@
 // lib/auth.js を importScripts で読み込む（MV3 Classic Service Worker）
 importScripts('lib/auth.js');
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+function handleMessage(message, sender, sendResponse) {
+  // Fix 1: 送信者検証 — 自拡張のみ許可
+  if (!sender || sender.id !== chrome.runtime.id) {
+    sendResponse({ success: false, error: 'unauthorized sender' });
+    return false;
+  }
+
   switch (message.type) {
     case 'CONNECT_SALESFORCE': {
       const { clientId, instanceUrl } = message;
+      // Fix 2: instanceUrl のバリデーション
+      if (!validateInstanceUrl(instanceUrl)) { // eslint-disable-line no-undef
+        sendResponse({ success: false, error: 'Invalid Salesforce login URL' });
+        return false;
+      }
       startOAuth(clientId, instanceUrl)
         .then(() => sendResponse({ success: true }))
         .catch((err) => sendResponse({ success: false, error: err.message }));
@@ -34,15 +45,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return true;
 
     default:
-      console.warn('Unknown message type:', message.type);
       sendResponse({ success: false, error: 'unknown message type' });
       return false;
   }
-});
+}
+
+chrome.runtime.onMessage.addListener(handleMessage);
 
 chrome.commands.onCommand.addListener((command) => {
   if (command === 'toggle-voice') {
-    // Step 4 で lib/speechRecognition.js を使って実装
-    console.warn('toggle-voice: not implemented yet');
+    // TODO: Step 4 で lib/speechRecognition.js を使って実装
   }
 });
+
+// Node.js (Jest) 環境向け CommonJS エクスポート
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { handleMessage };
+}
