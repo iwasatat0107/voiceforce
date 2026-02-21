@@ -22,7 +22,22 @@ module.exports = {
   },
   globals: {
     chrome: 'readonly',
-    webkitSpeechRecognition: 'readonly'
+    webkitSpeechRecognition: 'readonly',
+    module: 'writable',           // lib/*.js の CommonJS 互換エクスポートパターン
+    importScripts: 'readonly',    // Service Worker の importScripts()
+    // lib/auth.js から importScripts で読み込まれる関数（background.js で使用）
+    startOAuth: 'readonly',
+    disconnect: 'readonly',
+    isConnected: 'readonly',
+    getInstanceUrl: 'readonly',
+    getValidToken: 'readonly',
+    refreshAccessToken: 'readonly',
+    saveTokens: 'readonly',
+    getOrCreateEncryptionKey: 'readonly',
+    encryptString: 'readonly',
+    decryptString: 'readonly',
+    generateEncryptionKey: 'readonly',
+    exchangeCodeForTokens: 'readonly'
   },
   overrides: [
     {
