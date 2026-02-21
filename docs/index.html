@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VoiceForce | Salesforce Voice Assistant</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+      background: #f9fafb;
+      color: #1a1a1a;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    header {
+      background: #0070d2;
+      color: #fff;
+      padding: 48px 24px;
+      text-align: center;
+    }
+    header h1 { font-size: 2rem; font-weight: 700; }
+    header p  { margin-top: 8px; font-size: 1rem; opacity: 0.85; }
+    main {
+      max-width: 640px;
+      margin: 48px auto;
+      padding: 0 24px;
+      flex: 1;
+    }
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.1);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; color: #0070d2; }
+    .card p  { font-size: 0.95rem; line-height: 1.7; }
+    .card a  { color: #0070d2; text-decoration: none; }
+    .card a:hover { text-decoration: underline; }
+    footer {
+      text-align: center;
+      font-size: 0.8rem;
+      color: #999;
+      padding: 24px;
+      border-top: 1px solid #e5e7eb;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>VoiceForce</h1>
+  <p>Salesforce を音声で操作する Chrome 拡張機能</p>
+</header>
+
+<main>
+  <div class="card">
+    <h2>プライバシーポリシー</h2>
+    <p>
+      本拡張機能のデータ収集・利用方針については、
+      <a href="privacy-policy.html">プライバシーポリシー</a> をご確認ください。
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>ソースコード</h2>
+    <p>
+      VoiceForce はオープンソースです。
+      <a href="https://github.com/iwasatat0107/voiceforce" target="_blank" rel="noopener">GitHub リポジトリ</a> をご覧ください。
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>お問い合わせ</h2>
+    <p>
+      バグ報告・ご要望は
+      <a href="https://github.com/iwasatat0107/voiceforce/issues" target="_blank" rel="noopener">GitHub Issues</a>
+      からお願いします。
+    </p>
+  </div>
+</main>
+
+<footer>
+  &copy; 2026 VoiceForce. All rights reserved.
+</footer>
+
+</body>
+</html>

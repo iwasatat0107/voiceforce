@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>プライバシーポリシー | VoiceForce</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+      font-size: 16px;
+      line-height: 1.8;
+      color: #1a1a1a;
+      background: #f9fafb;
+    }
+    header {
+      background: #0070d2;
+      color: #fff;
+      padding: 24px 0;
+    }
+    header .inner { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+    header h1 { font-size: 1.6rem; font-weight: 700; }
+    header p  { font-size: 0.9rem; opacity: 0.85; margin-top: 4px; }
+    main {
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 24px 80px;
+    }
+    .meta {
+      font-size: 0.85rem;
+      color: #666;
+      margin-bottom: 32px;
+    }
+    h2 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #0070d2;
+      border-left: 4px solid #0070d2;
+      padding-left: 12px;
+      margin: 40px 0 16px;
+    }
+    p  { margin-bottom: 12px; }
+    ul {
+      margin: 8px 0 12px 24px;
+    }
+    ul li { margin-bottom: 6px; }
+    .highlight {
+      background: #eaf4ff;
+      border: 1px solid #b3d7f5;
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin: 16px 0;
+    }
+    .highlight strong { color: #0057a8; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px 14px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f0f4f8; font-weight: 600; }
+    .no   { color: #c00; font-weight: 600; }
+    .yes  { color: #080; font-weight: 600; }
+    footer {
+      text-align: center;
+      font-size: 0.8rem;
+      color: #999;
+      padding: 24px;
+      border-top: 1px solid #e5e7eb;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="inner">
+    <h1>VoiceForce プライバシーポリシー</h1>
+    <p>Salesforce Voice Assistant Chrome 拡張機能</p>
+  </div>
+</header>
+
+<main>
+  <p class="meta">最終更新日：2026年2月21日 &nbsp;|&nbsp; バージョン：1.0</p>
+
+  <p>
+    VoiceForce（以下「本拡張機能」）は、Salesforce を音声で操作するための Chrome 拡張機能です。
+    本プライバシーポリシーは、本拡張機能が収集・利用するデータについて説明します。
+  </p>
+
+  <!-- ===== 1. 基本方針 ===== -->
+  <h2>1. 基本方針</h2>
+
+  <div class="highlight">
+    <strong>顧客データはサーバーに送信されません。</strong><br>
+    Salesforce に保存された顧客データ（商談名、取引先名、連絡先情報などのレコード内容）は、
+    本拡張機能のバックエンドサーバーを一切経由しません。
+    音声操作の実行は、ユーザーのブラウザから Salesforce REST API に直接通信することで行います。
+  </div>
+
+  <!-- ===== 2. 収集するデータ ===== -->
+  <h2>2. 収集するデータ</h2>
+
+  <p>本拡張機能が収集するデータは以下のとおりです。</p>
+
+  <table>
+    <thead>
+      <tr><th>データ種別</th><th>内容</th><th>用途</th><th>保存先</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>発話テキスト</td>
+        <td>音声認識により変換されたテキスト（例：「商談一覧を表示して」）</td>
+        <td>LLM による意図解析</td>
+        <td>Cloudflare Workers（リクエスト処理後に破棄）</td>
+      </tr>
+      <tr>
+        <td>Salesforce メタデータ</td>
+        <td>オブジェクト名・項目名の一覧（例：「Opportunity」「Amount」）。<br>レコードの内容は含まれません。</td>
+        <td>意図解析の精度向上</td>
+        <td>Cloudflare Workers（リクエスト処理後に破棄）</td>
+      </tr>
+      <tr>
+        <td>利用回数カウント</td>
+        <td>匿名のユーザー ID に紐付いた API 呼び出し回数</td>
+        <td>無料プランの利用制限管理</td>
+        <td>Cloudflare KV（数値のみ、個人を特定できる情報なし）</td>
+      </tr>
+      <tr>
+        <td>OAuth トークン</td>
+        <td>Salesforce アクセストークン・リフレッシュトークン</td>
+        <td>Salesforce API 認証</td>
+        <td>ユーザーのブラウザ（chrome.storage.local に AES-256-GCM 暗号化して保存）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ===== 3. 収集しないデータ ===== -->
+  <h2>3. 収集しないデータ</h2>
+
+  <p>以下のデータは収集・送信しません。</p>
+  <ul>
+    <li>Salesforce のレコード内容（商談名・金額・取引先名・連絡先情報など）</li>
+    <li>氏名・メールアドレス・電話番号などの個人識別情報</li>
+    <li>Salesforce のパスワード・セキュリティトークン</li>
+    <li>ブラウザの閲覧履歴・Cookie・その他のウェブサイトのデータ</li>
+    <li>マイクの音声データ（音声認識はブラウザの Web Speech API により端末内で処理されます）</li>
+  </ul>
+
+  <!-- ===== 4. データの利用目的 ===== -->
+  <h2>4. データの利用目的</h2>
+
+  <p>収集したデータは以下の目的にのみ使用します。</p>
+  <ul>
+    <li><strong>意図解析：</strong>発話テキストとメタデータを AI モデル（Claude Haiku / GPT-4o-mini）に送信し、実行すべき Salesforce 操作を特定します。</li>
+    <li><strong>利用制限管理：</strong>無料プランの API 呼び出し上限を管理します（匿名カウントのみ）。</li>
+    <li><strong>サービス改善：</strong>将来的に精度向上のため集計データを分析する場合があります（その際は本ポリシーを更新します）。</li>
+  </ul>
+
+  <!-- ===== 5. 第三者への提供 ===== -->
+  <h2>5. 第三者へのデータ提供</h2>
+
+  <p>本拡張機能は以下の第三者サービスを利用します。</p>
+
+  <table>
+    <thead>
+      <tr><th>サービス</th><th>提供者</th><th>送信されるデータ</th><th>プライバシーポリシー</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Claude API (Haiku)</td>
+        <td>Anthropic, PBC</td>
+        <td>発話テキスト・メタデータ</td>
+        <td><a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">anthropic.com/privacy</a></td>
+      </tr>
+      <tr>
+        <td>Cloudflare Workers</td>
+        <td>Cloudflare, Inc.</td>
+        <td>発話テキスト・メタデータ・利用回数</td>
+        <td><a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">cloudflare.com/privacypolicy</a></td>
+      </tr>
+      <tr>
+        <td>Salesforce REST API</td>
+        <td>Salesforce.com, Inc.</td>
+        <td>OAuth トークン（ブラウザから直接通信）</td>
+        <td><a href="https://www.salesforce.com/company/privacy/" target="_blank" rel="noopener">salesforce.com/company/privacy</a></td>
+      </tr>
+      <tr>
+        <td>Web Speech API</td>
+        <td>Google LLC（Chrome 内蔵）</td>
+        <td>音声データ（端末内処理）</td>
+        <td><a href="https://policies.google.com/privacy" target="_blank" rel="noopener">policies.google.com/privacy</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>上記以外の第三者にデータを販売・提供することはありません。</p>
+
+  <!-- ===== 6. データの保存期間 ===== -->
+  <h2>6. データの保存期間</h2>
+  <ul>
+    <li><strong>発話テキスト・メタデータ：</strong>Cloudflare Workers によるリクエスト処理完了後、直ちに破棄されます。</li>
+    <li><strong>利用回数カウント：</strong>Cloudflare KV に保存され、プラン管理のために保持されます。</li>
+    <li><strong>OAuth トークン：</strong>ユーザーが拡張機能をアンインストールするか、手動でログアウトするまでブラウザに保存されます。</li>
+  </ul>
+
+  <!-- ===== 7. セキュリティ ===== -->
+  <h2>7. セキュリティ</h2>
+  <ul>
+    <li>OAuth アクセストークン・リフレッシュトークンは AES-256-GCM で暗号化して <code>chrome.storage.local</code> に保存します。</li>
+    <li>暗号化キーは <code>chrome.storage.session</code>（ブラウザセッション中のみ有効）に保存します。</li>
+    <li>Cloudflare Workers との通信は HTTPS で行います。</li>
+    <li>LLM から返されるアクション指示はホワイトリスト検証を経てから実行されます（プロンプトインジェクション対策）。</li>
+  </ul>
+
+  <!-- ===== 8. ユーザーの権利 ===== -->
+  <h2>8. ユーザーの権利</h2>
+  <ul>
+    <li><strong>データの削除：</strong>拡張機能をアンインストールすると、ブラウザに保存されたトークン・設定データはすべて削除されます。</li>
+    <li><strong>ログアウト：</strong>拡張機能のポップアップから Salesforce アカウントのログアウトが可能です。</li>
+    <li><strong>利用回数データの削除：</strong>削除をご希望の場合は下記の連絡先までお問い合わせください。</li>
+  </ul>
+
+  <!-- ===== 9. 対象ユーザー ===== -->
+  <h2>9. 対象ユーザー</h2>
+  <p>
+    本拡張機能は企業での業務利用を想定しており、13歳未満の子どもを対象としていません。
+    13歳未満の方は本拡張機能を使用しないでください。
+  </p>
+
+  <!-- ===== 10. ポリシーの変更 ===== -->
+  <h2>10. プライバシーポリシーの変更</h2>
+  <p>
+    本ポリシーを変更する場合は、このページを更新するとともに、
+    拡張機能の更新履歴（Chrome Web Store）でお知らせします。
+    重大な変更がある場合は、拡張機能内の通知でもお知らせします。
+  </p>
+
+  <!-- ===== 11. お問い合わせ ===== -->
+  <h2>11. お問い合わせ</h2>
+  <p>
+    プライバシーに関するご質問・ご要望は、GitHub リポジトリの Issue よりお問い合わせください。
+  </p>
+  <ul>
+    <li>GitHub: <a href="https://github.com/iwasatat0107/voiceforce/issues" target="_blank" rel="noopener">https://github.com/iwasatat0107/voiceforce/issues</a></li>
+  </ul>
+</main>
+
+<footer>
+  &copy; 2026 VoiceForce. All rights reserved.
+</footer>
+
+</body>
+</html>
