@@ -1,0 +1,15 @@
+name            = "voiceforce-worker"
+main            = "index.js"
+compatibility_date = "2024-01-01"
+
+# KV Namespace（利用回数カウント）
+# デプロイ前に以下のコマンドで KV を作成し、ID を設定してください:
+#   wrangler kv:namespace create "USAGE_KV"
+#   wrangler kv:namespace create "USAGE_KV" --preview
+[[kv_namespaces]]
+binding    = "USAGE_KV"
+id         = "YOUR_KV_NAMESPACE_ID_HERE"
+preview_id = "YOUR_KV_PREVIEW_NAMESPACE_ID_HERE"
+
+# Secrets（wrangler secret put で登録）:
+#   wrangler secret put CLAUDE_API_KEY
