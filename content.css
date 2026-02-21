@@ -1,5 +1,4 @@
 /* フローティングウィジェットのスタイル */
-/* Step 5（widget-ui）で詳細を実装 */
 
 #vfa-widget {
   position: fixed;
@@ -9,4 +8,123 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
   pointer-events: auto;
+
+  min-width: 240px;
+  max-width: 360px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 1px 4px rgba(0, 0, 0, 0.08);
+  padding: 12px 16px;
+  box-sizing: border-box;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* ── ステータスライン ── */
+.vfa-status {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+  color: #6b7280;
+}
+
+/* ── 認識テキスト（リアルタイム表示） ── */
+.vfa-transcript {
+  font-size: 14px;
+  color: #111827;
+  min-height: 20px;
+  word-break: break-all;
+  margin-bottom: 4px;
+}
+
+/* ── メッセージ ── */
+.vfa-message {
+  font-size: 13px;
+  color: #374151;
+  margin-bottom: 4px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+/* ── 確認ボタン群 ── */
+.vfa-confirm {
+  display: none;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.vfa-btn {
+  flex: 1;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.vfa-btn-yes {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.vfa-btn-yes:hover {
+  background: #1d4ed8;
+}
+
+.vfa-btn-no {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.vfa-btn-no:hover {
+  background: #e5e7eb;
+}
+
+/* ── 状態別スタイル ── */
+
+/* listening: 青系ボーダー */
+#vfa-widget[data-state="listening"] {
+  border-left: 3px solid #2563eb;
+}
+
+#vfa-widget[data-state="listening"] .vfa-status {
+  color: #2563eb;
+}
+
+/* processing: グレーボーダー */
+#vfa-widget[data-state="processing"] {
+  border-left: 3px solid #9ca3af;
+}
+
+#vfa-widget[data-state="processing"] .vfa-status {
+  color: #6b7280;
+}
+
+/* confirm: 黄色ボーダー */
+#vfa-widget[data-state="confirm"] {
+  border-left: 3px solid #d97706;
+}
+
+#vfa-widget[data-state="confirm"] .vfa-status {
+  color: #d97706;
+}
+
+/* success: 緑ボーダー */
+#vfa-widget[data-state="success"] {
+  border-left: 3px solid #16a34a;
+}
+
+#vfa-widget[data-state="success"] .vfa-status {
+  color: #16a34a;
+}
+
+/* error: 赤ボーダー */
+#vfa-widget[data-state="error"] {
+  border-left: 3px solid #dc2626;
+}
+
+#vfa-widget[data-state="error"] .vfa-status {
+  color: #dc2626;
 }

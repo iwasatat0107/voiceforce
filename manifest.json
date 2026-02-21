@@ -46,8 +46,7 @@
   "commands": {
     "toggle-voice": {
       "suggested_key": {
-        "default": "Ctrl+Shift+V",
-        "mac": "Command+Shift+V"
+        "default": "Alt+V"
       },
       "description": "音声入力のON/OFF切り替え"
     }
