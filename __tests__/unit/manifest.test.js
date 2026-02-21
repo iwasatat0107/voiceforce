@@ -38,4 +38,21 @@ describe('manifest.json', () => {
     const hp = manifest.host_permissions;
     expect(hp.some(h => h.includes('salesforce.com'))).toBe(true);
   });
+
+  // ── CSP（Fix 9） ──────────────────────────────────────────────
+  test('content_security_policy が設定されている', () => {
+    expect(manifest.content_security_policy).toBeDefined();
+    expect(manifest.content_security_policy.extension_pages).toBeDefined();
+  });
+
+  test('CSP で unsafe-inline / unsafe-eval が禁止されている', () => {
+    const csp = manifest.content_security_policy.extension_pages;
+    expect(csp).not.toContain('unsafe-inline');
+    expect(csp).not.toContain('unsafe-eval');
+  });
+
+  test('CSP に script-src self が含まれている', () => {
+    const csp = manifest.content_security_policy.extension_pages;
+    expect(csp).toContain("script-src 'self'");
+  });
 });
