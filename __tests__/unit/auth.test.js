@@ -216,15 +216,61 @@ describe('lib/auth.js', () => {
   });
 
   // ──────────────────────────────────────────
+  // validateInstanceUrl (Fix 2)
+  // ──────────────────────────────────────────
+  describe('validateInstanceUrl', () => {
+    test('https://login.salesforce.com → true', () => {
+      expect(auth.validateInstanceUrl('https://login.salesforce.com')).toBe(true);
+    });
+
+    test('https://test.salesforce.com → true', () => {
+      expect(auth.validateInstanceUrl('https://test.salesforce.com')).toBe(true);
+    });
+
+    test('https://evil.com → false', () => {
+      expect(auth.validateInstanceUrl('https://evil.com')).toBe(false);
+    });
+
+    test('https://login.salesforce.com.evil.com → false', () => {
+      expect(auth.validateInstanceUrl('https://login.salesforce.com.evil.com')).toBe(false);
+    });
+
+    // eslint-disable-next-line no-script-url
+    test('javascript: プロトコル → false', () => {
+      expect(auth.validateInstanceUrl('javascript:alert(1)')).toBe(false); // eslint-disable-line no-script-url
+    });
+
+    test('null → false', () => {
+      expect(auth.validateInstanceUrl(null)).toBe(false);
+    });
+
+    test('空文字 → false', () => {
+      expect(auth.validateInstanceUrl('')).toBe(false);
+    });
+
+    test('数値型 → false', () => {
+      expect(auth.validateInstanceUrl(123)).toBe(false);
+    });
+
+    test('http://login.salesforce.com（HTTP） → false', () => {
+      expect(auth.validateInstanceUrl('http://login.salesforce.com')).toBe(false);
+    });
+
+    test('https://login.salesforce.com/path → true（パス付き）', () => {
+      expect(auth.validateInstanceUrl('https://login.salesforce.com/some/path')).toBe(true);
+    });
+  });
+
+  // ──────────────────────────────────────────
   // startOAuth
   // ──────────────────────────────────────────
   describe('startOAuth', () => {
     test('launchWebAuthFlow を呼び出し、コードを交換してトークンを保存する', async () => {
-      const mockRedirectUrl =
-        'https://test.chromiumapp.org/oauth?code=AUTH_CODE_123&state=abc';
-
       chrome.identity.launchWebAuthFlow.mockImplementationOnce((params, cb) => {
-        cb(mockRedirectUrl);
+        // 送信された authUrl から state を取得し、同じ state を返す
+        const authUrl = new URL(params.url);
+        const state = authUrl.searchParams.get('state');
+        cb(`https://test.chromiumapp.org/oauth?code=AUTH_CODE_123&state=${encodeURIComponent(state)}`);
       });
 
       global.fetch = jest.fn().mockResolvedValueOnce({
@@ -267,7 +313,9 @@ describe('lib/auth.js', () => {
 
     test('リダイレクト URL に code がなければエラーをスローする', async () => {
       chrome.identity.launchWebAuthFlow.mockImplementationOnce((params, cb) => {
-        cb('https://test.chromiumapp.org/oauth?error=access_denied');
+        const authUrl = new URL(params.url);
+        const state = authUrl.searchParams.get('state');
+        cb(`https://test.chromiumapp.org/oauth?error=access_denied&state=${encodeURIComponent(state)}`);
       });
 
       await expect(
@@ -275,9 +323,32 @@ describe('lib/auth.js', () => {
       ).rejects.toThrow();
     });
 
+    test('不正な instanceUrl でエラーをスローする', async () => {
+      await expect(
+        auth.startOAuth('test_client_id', 'https://evil.com')
+      ).rejects.toThrow('Invalid Salesforce login URL');
+    });
+
+    test('OAuth state が不一致の場合エラーをスローする (CSRF防止)', async () => {
+      // state パラメータが異なるリダイレクト URL を返す
+      chrome.identity.launchWebAuthFlow.mockImplementationOnce((params, cb) => {
+        // 元の URL から state を取得し、異なる state でリダイレクト
+        cb('https://test.chromiumapp.org/oauth?code=AUTH_CODE_123&state=WRONG_STATE');
+      });
+
+      chrome.storage.session.get.mockImplementation((keys, cb) => cb({}));
+      chrome.storage.session.set.mockImplementation((items, cb) => cb());
+
+      await expect(
+        auth.startOAuth('test_client_id', 'https://login.salesforce.com')
+      ).rejects.toThrow('OAuth state mismatch');
+    });
+
     test('トークン交換が失敗したらエラーをスローする', async () => {
       chrome.identity.launchWebAuthFlow.mockImplementationOnce((params, cb) => {
-        cb('https://test.chromiumapp.org/oauth?code=BAD_CODE&state=abc');
+        const authUrl = new URL(params.url);
+        const state = authUrl.searchParams.get('state');
+        cb(`https://test.chromiumapp.org/oauth?code=BAD_CODE&state=${encodeURIComponent(state)}`);
       });
 
       global.fetch = jest.fn().mockResolvedValueOnce({

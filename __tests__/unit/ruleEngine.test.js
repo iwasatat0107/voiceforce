@@ -296,4 +296,24 @@ describe('RuleEngine', () => {
       expect(ruleEngine.match(123)).toBeNull();
     });
   });
+
+  // ─── 入力長制限（Fix 11） ──────────────────────────────────────────────
+  describe('入力長制限', () => {
+    test('500文字 → 正常処理（マッチしない文字列だが null を返す）', () => {
+      const input = 'あ'.repeat(500);
+      // 500文字の入力はマッチしないため null だが、ReDoS 防止で処理される
+      expect(ruleEngine.match(input)).toBeNull();
+    });
+
+    test('501文字 → null（長さ制限で即座に拒否）', () => {
+      const input = 'あ'.repeat(501);
+      expect(ruleEngine.match(input)).toBeNull();
+    });
+
+    test('500文字でマッチする文字列 → 正常処理', () => {
+      // 先頭に「はい」+ 残りスペースで500文字（トリム後は「はい」）
+      const input = 'はい' + ' '.repeat(498);
+      expect(ruleEngine.match(input)).toEqual({ action: 'confirm', value: true });
+    });
+  });
 });
