@@ -13,13 +13,13 @@ function handleMessage(message, sender, sendResponse) {
 
   switch (message.type) {
     case 'CONNECT_SALESFORCE': {
-      const { clientId, instanceUrl } = message;
+      const { clientId, clientSecret, instanceUrl } = message;
       // Fix 2: instanceUrl のバリデーション
       if (!validateInstanceUrl(instanceUrl)) { // eslint-disable-line no-undef
         sendResponse({ success: false, error: 'Invalid Salesforce login URL' });
         return false;
       }
-      startOAuth(clientId, instanceUrl)
+      startOAuth(clientId, instanceUrl, clientSecret)
         .then(() => sendResponse({ success: true }))
         .catch((err) => sendResponse({ success: false, error: err.message }));
       return true; // 非同期レスポンスのため
