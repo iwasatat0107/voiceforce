@@ -5,11 +5,9 @@
   "description": "Salesforceを音声で操作するChrome拡張機能",
   "permissions": [
     "activeTab",
+    "tabs",
     "storage",
     "identity"
-  ],
-  "optional_permissions": [
-    "tabs"
   ],
   "host_permissions": [
     "https://*.salesforce.com/*",
@@ -26,7 +24,13 @@
         "https://*.force.com/*",
         "https://*.lightning.force.com/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "lib/ruleEngine.js",
+        "lib/navigator.js",
+        "lib/speechRecognition.js",
+        "ui/widget.js",
+        "content.js"
+      ],
       "css": ["content.css"]
     }
   ],
