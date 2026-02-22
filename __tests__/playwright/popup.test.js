@@ -75,8 +75,9 @@ test('コンシューマーキー未入力で接続ボタンを押すとエラ�
 
   await page.locator('#connect-btn').click();
 
+  // CSS transition を回避するためインラインスタイルを直接確認
   const borderColor = await page.locator('#client-id-input').evaluate(
-    el => window.getComputedStyle(el).borderColor
+    el => el.style.borderColor
   );
   expect(borderColor).toContain('239'); // rgb(239, 68, 68) = #ef4444
 
