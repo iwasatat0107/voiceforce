@@ -61,6 +61,32 @@
       margin-top: 16px;
     }
 
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 7px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+      box-sizing: border-box;
+      margin-bottom: 10px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      border-color: #0066cc;
+    }
+
     button {
       width: 100%;
       padding: 8px 16px;
@@ -143,9 +169,21 @@
     <div id="instance-url" class="instance-url" style="display:none;"></div>
   </div>
 
-  <div class="section">
+  <div id="connect-form" class="section">
+    <label for="client-id-input">コンシューマーキー</label>
+    <input type="text" id="client-id-input" placeholder="Connected App のコンシューマーキー">
+
+    <label for="client-secret-input">コンシューマーシークレット</label>
+    <input type="password" id="client-secret-input" placeholder="コンシューマーシークレット">
+
+    <label for="instance-url-input">Salesforce URL</label>
+    <input type="text" id="instance-url-input" value="https://login.salesforce.com" placeholder="https://login.salesforce.com">
+
     <button id="connect-btn" class="btn-primary">Salesforceに接続</button>
-    <button id="disconnect-btn" class="btn-danger" style="display:none;">接続を解除</button>
+  </div>
+
+  <div id="disconnect-section" class="section" style="display:none;">
+    <button id="disconnect-btn" class="btn-danger">接続を解除</button>
   </div>
 
   <div class="shortcut-section">
