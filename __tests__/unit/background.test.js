@@ -118,7 +118,8 @@ describe('background.js', () => {
       expect(result).toBe(true);
       expect(global.startOAuth).toHaveBeenCalledWith(
         'test_client',
-        'https://login.salesforce.com'
+        'https://login.salesforce.com',
+        undefined
       );
     });
   });
