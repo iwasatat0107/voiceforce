@@ -4,7 +4,8 @@ module.exports = {
   testMatch: ['**/*.test.js'],
   testPathIgnorePatterns: [
     '/node_modules/',
-    '__tests__/prompt/' // プロンプトテストはCIでは除外・手動実行のみ
+    '__tests__/prompt/',    // プロンプトテストはCIでは除外・手動実行のみ
+    '__tests__/playwright/' // Playwrightテストは npx playwright test で実行
   ],
   collectCoverageFrom: [
     'lib/**/*.js',

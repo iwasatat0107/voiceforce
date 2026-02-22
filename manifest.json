@@ -1,15 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Salesforce Voice Assistant",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Salesforceを音声で操作するChrome拡張機能",
   "permissions": [
     "activeTab",
+    "tabs",
     "storage",
     "identity"
-  ],
-  "optional_permissions": [
-    "tabs"
   ],
   "host_permissions": [
     "https://*.salesforce.com/*",
@@ -26,7 +24,13 @@
         "https://*.force.com/*",
         "https://*.lightning.force.com/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "lib/ruleEngine.js",
+        "lib/navigator.js",
+        "lib/speechRecognition.js",
+        "ui/widget.js",
+        "content.js"
+      ],
       "css": ["content.css"]
     }
   ],
@@ -42,6 +46,9 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
   },
   "commands": {
     "toggle-voice": {

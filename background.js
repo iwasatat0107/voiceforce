@@ -4,11 +4,22 @@
 // lib/auth.js を importScripts で読み込む（MV3 Classic Service Worker）
 importScripts('lib/auth.js');
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+function handleMessage(message, sender, sendResponse) {
+  // Fix 1: 送信者検証 — 自拡張のみ許可
+  if (!sender || sender.id !== chrome.runtime.id) {
+    sendResponse({ success: false, error: 'unauthorized sender' });
+    return false;
+  }
+
   switch (message.type) {
     case 'CONNECT_SALESFORCE': {
-      const { clientId, instanceUrl } = message;
-      startOAuth(clientId, instanceUrl)
+      const { clientId, clientSecret, instanceUrl } = message;
+      // Fix 2: instanceUrl のバリデーション
+      if (!validateInstanceUrl(instanceUrl)) { // eslint-disable-line no-undef
+        sendResponse({ success: false, error: 'Invalid Salesforce login URL' });
+        return false;
+      }
+      startOAuth(clientId, instanceUrl, clientSecret)
         .then(() => sendResponse({ success: true }))
         .catch((err) => sendResponse({ success: false, error: err.message }));
       return true; // 非同期レスポンスのため
@@ -34,15 +45,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return true;
 
     default:
-      console.warn('Unknown message type:', message.type);
       sendResponse({ success: false, error: 'unknown message type' });
       return false;
   }
-});
+}
+
+chrome.runtime.onMessage.addListener(handleMessage);
 
 chrome.commands.onCommand.addListener((command) => {
   if (command === 'toggle-voice') {
-    // Step 4 で lib/speechRecognition.js を使って実装
-    console.warn('toggle-voice: not implemented yet');
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, { type: 'TOGGLE_VOICE' });
+      }
+    });
   }
 });
+
+// Node.js (Jest) 環境向け CommonJS エクスポート
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { handleMessage };
+}

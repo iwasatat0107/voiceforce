@@ -22,7 +22,7 @@ describe('音声→アクション統合テスト', () => {
       ['商談の一覧',       'Opportunity'],
       ['取引先を開いて',   'Account'],
       ['リードリスト',     'Lead'],
-      ['タスクを表示して',   'Task'],
+      ['タスクを表示',       'Task'],
     ])('ruleEngine: "%s" → %s 一覧URLに遷移する', (text, objectName) => {
       const action = match(text);
       expect(action).not.toBeNull();

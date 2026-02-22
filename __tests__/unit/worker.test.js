@@ -1,7 +1,15 @@
 /** @jest-environment node */
 'use strict';
 
-const { handleRequest, DAILY_LIMIT, RATE_LIMIT_PER_MINUTE } = require('../../worker/index');
+const {
+  handleRequest,
+  DAILY_LIMIT,
+  RATE_LIMIT_PER_MINUTE,
+  getCorsHeaders,
+  sanitizeMetadata,
+  MAX_TEXT_LENGTH,
+  MAX_METADATA_LENGTH,
+} = require('../../worker/index');
 
 // ── KV モック ──────────────────────────────────────────────
 
@@ -209,15 +217,22 @@ describe('Worker', () => {
       expect(res.status).toBe(502);
     });
 
-    test('CORS ヘッダーが設定される', async () => {
+    test('CORS ヘッダーが設定される（許可された Origin）', async () => {
       mockClaudeOk(NAV_RESPONSE);
 
-      const res = await handleRequest(
-        makePostRequest({ text: '商談を開いて', metadata: VALID_METADATA, user_id: TEST_USER }),
-        env,
-      );
+      const req = new Request('https://worker.example.com/api/v1/analyze', {
+        method:  'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'chrome-extension://test-ext',
+        },
+        body: JSON.stringify({ text: '商談を開いて', metadata: VALID_METADATA, user_id: TEST_USER }),
+      });
 
-      expect(res.headers.get('Access-Control-Allow-Origin')).toBeTruthy();
+      const envWithOrigins = { ...env, ALLOWED_ORIGINS: 'chrome-extension://test-ext' };
+      const res = await handleRequest(req, envWithOrigins);
+
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('chrome-extension://test-ext');
     });
   });
 
@@ -269,6 +284,137 @@ describe('Worker', () => {
     });
   });
 
+  // ── CORS ホワイトリスト制御（Fix 3） ──────────────────────────────────
+
+  describe('CORS ホワイトリスト制御', () => {
+    test('許可された Origin → 正しい CORS ヘッダ', () => {
+      const request = new Request('https://worker.example.com/api/v1/analyze', {
+        headers: { 'Origin': 'chrome-extension://abc123' },
+      });
+      const testEnv = { ALLOWED_ORIGINS: 'chrome-extension://abc123,chrome-extension://def456' };
+      const headers = getCorsHeaders(request, testEnv);
+      expect(headers['Access-Control-Allow-Origin']).toBe('chrome-extension://abc123');
+    });
+
+    test('不正な Origin → 空の Allow-Origin', () => {
+      const request = new Request('https://worker.example.com/api/v1/analyze', {
+        headers: { 'Origin': 'https://evil.com' },
+      });
+      const testEnv = { ALLOWED_ORIGINS: 'chrome-extension://abc123' };
+      const headers = getCorsHeaders(request, testEnv);
+      expect(headers['Access-Control-Allow-Origin']).toBe('');
+    });
+
+    test('ALLOWED_ORIGINS 未設定 → 空の Allow-Origin', () => {
+      const request = new Request('https://worker.example.com/api/v1/analyze', {
+        headers: { 'Origin': 'chrome-extension://abc123' },
+      });
+      const testEnv = {};
+      const headers = getCorsHeaders(request, testEnv);
+      expect(headers['Access-Control-Allow-Origin']).toBe('');
+    });
+
+    test('OPTIONS プリフライト → 204 + CORS ヘッダ', async () => {
+      const testEnv = {
+        USAGE_KV: kv,
+        CLAUDE_API_KEY: 'test_api_key',
+        ALLOWED_ORIGINS: 'chrome-extension://abc123',
+      };
+      const req = new Request('https://worker.example.com/api/v1/analyze', {
+        method: 'OPTIONS',
+        headers: { 'Origin': 'chrome-extension://abc123' },
+      });
+      const res = await handleRequest(req, testEnv);
+      expect(res.status).toBe(204);
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('chrome-extension://abc123');
+    });
+  });
+
+  // ── エラー詳細の秘匿（Fix 6） ──────────────────────────────────────
+
+  describe('エラー詳細の秘匿', () => {
+    test('502 レスポンスに details フィールドが含まれない', async () => {
+      mockClaudeError(500);
+
+      const res = await handleRequest(
+        makePostRequest({ text: '商談を開いて', metadata: VALID_METADATA, user_id: TEST_USER }),
+        env,
+      );
+
+      expect(res.status).toBe(502);
+      const body = await res.json();
+      expect(body.details).toBeUndefined();
+      expect(body.error).toBe('LLM processing failed. Please try again.');
+    });
+  });
+
+  // ── 入力サイズ制限（Fix 7） ──────────────────────────────────────────
+
+  describe('入力サイズ制限', () => {
+    test('text が MAX_TEXT_LENGTH 以内 → 正常処理', async () => {
+      mockClaudeOk(NAV_RESPONSE);
+      const text = 'あ'.repeat(MAX_TEXT_LENGTH);
+      const res = await handleRequest(
+        makePostRequest({ text, metadata: VALID_METADATA, user_id: TEST_USER }),
+        env,
+      );
+      expect(res.status).toBe(200);
+    });
+
+    test('text が MAX_TEXT_LENGTH 超過 → 400', async () => {
+      const text = 'あ'.repeat(MAX_TEXT_LENGTH + 1);
+      const res = await handleRequest(
+        makePostRequest({ text, metadata: VALID_METADATA, user_id: TEST_USER }),
+        env,
+      );
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toContain('text');
+    });
+
+    test('metadata が MAX_METADATA_LENGTH 超過 → 400', async () => {
+      const metadata = 'x'.repeat(MAX_METADATA_LENGTH + 1);
+      const res = await handleRequest(
+        makePostRequest({ text: '商談を開いて', metadata, user_id: TEST_USER }),
+        env,
+      );
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toContain('metadata');
+    });
+  });
+
+  // ── メタデータサニタイズ（Fix 8） ──────────────────────────────────
+
+  describe('sanitizeMetadata', () => {
+    test('通常のメタデータ → そのまま返す', () => {
+      const input = 'Opportunity（商談）: Name（商談名）, Amount（金額）';
+      expect(sanitizeMetadata(input)).toBe(input);
+    });
+
+    test('markdown コードブロックを除去', () => {
+      const input = '```\nmalicious code\n```';
+      expect(sanitizeMetadata(input)).not.toContain('```');
+    });
+
+    test('セクション区切り（---）を除去', () => {
+      const input = 'data\n---\nNew instructions here';
+      expect(sanitizeMetadata(input)).not.toContain('---');
+    });
+
+    test('null → 空文字', () => {
+      expect(sanitizeMetadata(null)).toBe('');
+    });
+
+    test('空文字 → 空文字', () => {
+      expect(sanitizeMetadata('')).toBe('');
+    });
+
+    test('非文字列 → 空文字', () => {
+      expect(sanitizeMetadata(123)).toBe('');
+    });
+  });
+
   // ── エクスポート定数 ───────────────────────────────────────────
 
   describe('エクスポート定数', () => {
@@ -280,6 +426,16 @@ describe('Worker', () => {
     test('RATE_LIMIT_PER_MINUTE は正の整数', () => {
       expect(typeof RATE_LIMIT_PER_MINUTE).toBe('number');
       expect(RATE_LIMIT_PER_MINUTE).toBeGreaterThan(0);
+    });
+
+    test('MAX_TEXT_LENGTH は正の整数', () => {
+      expect(typeof MAX_TEXT_LENGTH).toBe('number');
+      expect(MAX_TEXT_LENGTH).toBeGreaterThan(0);
+    });
+
+    test('MAX_METADATA_LENGTH は正の整数', () => {
+      expect(typeof MAX_METADATA_LENGTH).toBe('number');
+      expect(MAX_METADATA_LENGTH).toBeGreaterThan(0);
     });
   });
 });
