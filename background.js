@@ -54,7 +54,11 @@ chrome.runtime.onMessage.addListener(handleMessage);
 
 chrome.commands.onCommand.addListener((command) => {
   if (command === 'toggle-voice') {
-    // TODO: Step 4 で lib/speechRecognition.js を使って実装
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, { type: 'TOGGLE_VOICE' });
+      }
+    });
   }
 });
 
