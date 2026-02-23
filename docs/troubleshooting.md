@@ -135,16 +135,36 @@ content.js は以下の関数をグローバル変数として参照します。
 "content_scripts": [{
   "matches": ["https://*.salesforce.com/*", ...],
   "js": [
-    "lib/ruleEngine.js",       // match() を提供
-    "lib/navigator.js",        // buildListUrl(), navigateTo(), goBack() を提供
+    "lib/ruleEngine.js",        // match() を提供
+    "lib/navigator.js",         // buildListUrl(), navigateTo(), goBack(), buildRecordUrl() を提供
     "lib/speechRecognition.js", // createSpeechRecognition() を提供
-    "ui/widget.js",            // createWidget() を提供
-    "content.js"               // ← 最後に読み込む
+    "lib/salesforceApi.js",     // sosl() を提供
+    "lib/recordResolver.js",    // resolve() を提供
+    "ui/widget.js",             // createWidget() を提供
+    "ui/candidateList.js",      // createCandidateList() を提供
+    "content.js"                // ← 最後に読み込む（依存先が全て揃った後）
   ]
 }]
 ```
 
-**よくある間違い**: `content.js` だけを指定して依存ファイルを省略してしまう。
+> ⚠️ **いずれか 1 ファイルでもロードエラーになると、後続の content.js も読み込まれず Option+V が完全に無反応になります。**
+
+**よくある間違い**:
+- 新しい `lib/` または `ui/` ファイルを content.js から参照したが、manifest.json への追記を忘れた
+- ファイルを追加したが `content.js` より後に記載してしまった
+
+**自動検知**: `npx jest __tests__/unit/manifest.test.js` の `content_scripts 整合性` テスト群が
+追記漏れを CI で検知します（インシデント #2 再発防止、2026-02-23 追加）。
+
+**実機確認手順**（manifest.json を変更したら必須）:
+
+```
+① npm run build
+② chrome://extensions/ → VoiceForce → ↻ リロード（アンロード→再ロードの方が確実）
+③ Salesforce タブを Cmd+R でリロード
+④ DevTools → Console でエラーがないことを確認
+⑤ Option+V でウィジェットが開くことを確認
+```
 
 ---
 
@@ -375,7 +395,7 @@ chrome.storage.session.get(null, console.log)
 □ npm run build を実行した
 □ chrome://extensions/ → VoiceForce → 更新ボタンをクリックした
 □ Salesforce ページをリロードした
-□ ウィジェットが Option+V で開くことを確認した
+□ ウィジェットが Option+V で開くことを確認した  ← 最重要: 無反応なら §2-1 参照
 □ 「商談の一覧を表示してください」で画面遷移することを確認した
 □ ポップアップで「接続済み」になっていることを確認した
 ```
@@ -385,10 +405,16 @@ chrome.storage.session.get(null, console.log)
 | 修正内容 | 追加確認 |
 |---------|----------|
 | `lib/auth.js` | 一度「接続を解除」してから再接続を試す |
-| `manifest.json` | Chrome 拡張をアンロード → 再ロードする（更新ボタンだけでは不十分な場合あり） |
+| `manifest.json` | Chrome 拡張を **アンロード → 再ロード**（更新ボタンだけでは不十分な場合あり） |
+| `manifest.json` の `content_scripts` に新ファイル追加 | `npx jest __tests__/unit/manifest.test.js` 実行 → Option+V 実機確認（§2-2 参照） |
+| `content.js` に新グローバル関数依存を追加 | `manifest.test.js` の `REQUIRED_PROVIDERS` テーブルも更新する |
 | `lib/ruleEngine.js` | `npx jest __tests__/unit/ruleEngine.test.js` でテストが通ることを確認 |
 | `background.js` | サービスワーカーを inspect → 再起動 |
 | `ui/widget.js` | ウィジェットの 6 状態（idle/listening/processing/confirm/success/error）を目視確認 |
+
+> **⚠️ インシデント #2 教訓（2026-02-23）**: `manifest.json` の `content_scripts` を変更した際に
+> 上記手順を省略すると Option+V が完全に無反応になります。
+> 詳細は [`docs/incident-report-2026-02.md`](./incident-report-2026-02.md) 「インシデント #2」を参照。
 
 ---
 

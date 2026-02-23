@@ -117,8 +117,9 @@ describe('RuleEngine', () => {
   });
 
   describe('navigate - マッチしないパターン（→ null）', () => {
-    test('「田中商事の商談を開いて」→ null', () => {
-      expect(ruleEngine.match('田中商事の商談を開いて')).toBeNull();
+    test('「田中商事の商談を開いて」→ search（navigateではなくsearchにマッチ）', () => {
+      // search パターン追加後は search アクションにマッチする
+      expect(ruleEngine.match('田中商事の商談を開いて')).toMatchObject({ action: 'search', object: 'Opportunity', keyword: '田中商事' });
     });
 
     test('「田中商事の商談の金額を500万にして」→ null', () => {
@@ -348,6 +349,42 @@ describe('RuleEngine', () => {
 
     test('数値型 → null', () => {
       expect(ruleEngine.match(123)).toBeNull();
+    });
+  });
+
+  // ─── search patterns ──────────────────────────────────────────────────
+
+  describe('search patterns - [keyword]の[object]を開いて', () => {
+    test.each([
+      ['田中商事の商談を開いて',         'Opportunity', '田中商事'],
+      ['山田太郎の取引先責任者を開いて', 'Contact',     '山田太郎'],
+      ['田中の取引先を見せて',           'Account',     '田中'],
+      ['鈴木さんのリードを開いて',       'Lead',        '鈴木さん'],
+      ['議事録のタスクを表示して',       'Task',        '議事録'],
+    ])('「%s」→ search/%s/keyword=%s', (input, object, keyword) => {
+      const result = ruleEngine.match(input);
+      expect(result).toEqual(expect.objectContaining({ action: 'search', object, keyword }));
+    });
+
+    // 他のパターンより後に評価されること（priorityテスト）
+    test('「最近の商談を開いて」→ navigate/Recent（searchにはならない）', () => {
+      expect(ruleEngine.match('最近の商談を開いて')).toMatchObject({ action: 'navigate', filterName: 'Recent' });
+    });
+    test('「自分の商談を開いて」→ navigate/MyOpportunities（searchにはならない）', () => {
+      expect(ruleEngine.match('自分の商談を開いて')).toMatchObject({ action: 'navigate', filterName: 'MyOpportunities' });
+    });
+    test('「すべての商談を開いて」→ navigate/AllOpportunities（searchにはならない）', () => {
+      expect(ruleEngine.match('すべての商談を開いて')).toMatchObject({ action: 'navigate', filterName: 'AllOpportunities' });
+    });
+  });
+
+  describe('search patterns - [object]で[keyword]を検索して', () => {
+    test.each([
+      ['商談で田中商事を検索して', 'Opportunity', '田中商事'],
+      ['取引先で田中を探して',     'Account',     '田中'],
+    ])('「%s」→ search/%s/keyword=%s', (input, object, keyword) => {
+      const result = ruleEngine.match(input);
+      expect(result).toEqual(expect.objectContaining({ action: 'search', object, keyword }));
     });
   });
 
