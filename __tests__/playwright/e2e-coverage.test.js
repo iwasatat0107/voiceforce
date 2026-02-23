@@ -377,11 +377,11 @@ test('テスト3-2: 「すべての商談」→ ruleEngine が filterName=All �
     };
   });
 
-  expect(intents.all1.filterName).toBe('All');
-  expect(intents.all2.filterName).toBe('All');
-  expect(intents.all3.filterName).toBe('All');
-  expect(intents.recent1.filterName).toBe('RecentlyViewed');
-  expect(intents.recent2.filterName).toBe('RecentlyViewed');
+  expect(intents.all1.filterName).toBe('AllOpportunities');
+  expect(intents.all2.filterName).toBe('AllOpportunities');
+  expect(intents.all3.filterName).toBe('AllOpportunities');
+  expect(intents.recent1.filterName).toBe('Recent');
+  expect(intents.recent2.filterName).toBe('Recent');
   expect(intents.mine1.filterName).toBe('MyOpportunities');
   expect(intents.mine2.filterName).toBe('MyOpportunities');
 

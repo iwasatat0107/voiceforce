@@ -126,6 +126,59 @@ describe('RuleEngine', () => {
     });
   });
 
+  // ─── filterName の正確性 ──────────────────────────────────────────────────
+
+  describe('navigate - filterName: すべて（All）系', () => {
+    test.each([
+      ['すべての商談を開いて',         'Opportunity', 'AllOpportunities'],
+      ['すべての取引先を開いて',       'Account',     'AllAccounts'],
+      ['すべての取引先責任者を開いて', 'Contact',     'AllContacts'],
+      ['すべてのリードを開いて',       'Lead',        'AllLeads'],
+    ])('「%s」→ filterName: %s', (input, object, filterName) => {
+      const result = ruleEngine.match(input);
+      expect(result).toEqual(expect.objectContaining({
+        action: 'navigate',
+        object,
+        target: 'list',
+        filterName,
+      }));
+    });
+  });
+
+  describe('navigate - filterName: 最近参照（RecentlyViewed）系', () => {
+    test.each([
+      ['最近の商談を開いて',         'Opportunity', 'Recent'],
+      ['最近参照した取引先を開いて', 'Account',     'Recent'],
+      ['最近の取引先責任者を開いて', 'Contact',     'Recent'],
+      ['最近のリードを開いて',       'Lead',        'Recent'],
+    ])('「%s」→ filterName: Recent', (input, object, filterName) => {
+      const result = ruleEngine.match(input);
+      expect(result).toEqual(expect.objectContaining({
+        action: 'navigate',
+        object,
+        target: 'list',
+        filterName,
+      }));
+    });
+  });
+
+  describe('navigate - filterName: 自分（My）系', () => {
+    test.each([
+      ['自分の商談を開いて',         'Opportunity', 'MyOpportunities'],
+      ['自分の取引先を開いて',       'Account',     'MyAccounts'],
+      ['自分の取引先責任者を開いて', 'Contact',     'MyContacts'],
+      ['自分のリードを開いて',       'Lead',        'MyLeads'],
+    ])('「%s」→ filterName: %s', (input, object, filterName) => {
+      const result = ruleEngine.match(input);
+      expect(result).toEqual(expect.objectContaining({
+        action: 'navigate',
+        object,
+        target: 'list',
+        filterName,
+      }));
+    });
+  });
+
   // ─── confirm patterns ─────────────────────────────────────────────────────
 
   describe('confirm patterns - はい系', () => {
