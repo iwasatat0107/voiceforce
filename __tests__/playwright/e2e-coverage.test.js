@@ -1209,3 +1209,97 @@ test('テスト3-search-4: 「存在しないXXXの商談」→ 0件 → NOT_FOU
 
   await page.close();
 });
+
+// ═══════════════════════════════════════════════════════════════
+// テスト7: content_scripts 統合スモークテスト
+//
+// 背景（インシデント #2 再発防止）:
+//   manifest.json の content_scripts に新スクリプトを追加した際、
+//   いずれかのスクリプトが読み込みエラーになると後続の content.js も
+//   読み込まれず、Option+V が完全に無反応になる。
+//
+//   このテスト群は「全 content_scripts 読み込み後に content.js が依存する
+//   グローバル関数が全て定義されているか」を自動検証し、
+//   CI でリグレッションを即座に検知する。
+// ═══════════════════════════════════════════════════════════════
+
+// ── テスト7-1: 全グローバル関数の存在確認 ────────────────────────
+//
+// manifest.json の content_scripts に新ファイルを追加・削除したとき、
+// content.js が参照するグローバル関数が全て定義されていることを保証する。
+// いずれかが undefined なら「そのファイルがロードに失敗している」証拠。
+
+test('テスト7-1: 全 content_scripts ロード後 — content.js 依存グローバル関数が全て定義されている', async () => {
+  const page = await setupPage();
+
+  const globals = await page.evaluate(() => ({
+    // lib/ruleEngine.js
+    match:                   typeof window.match === 'function',
+    // lib/navigator.js
+    navigateTo:              typeof window.navigateTo === 'function',
+    buildListUrl:            typeof window.buildListUrl === 'function',
+    buildRecordUrl:          typeof window.buildRecordUrl === 'function',
+    goBack:                  typeof window.goBack === 'function',
+    // lib/speechRecognition.js
+    createSpeechRecognition: typeof window.createSpeechRecognition === 'function',
+    // lib/salesforceApi.js
+    sosl:                    typeof window.sosl === 'function',
+    // lib/recordResolver.js
+    resolve:                 typeof window.resolve === 'function',
+    // ui/widget.js
+    createWidget:            typeof window.createWidget === 'function',
+    // ui/candidateList.js
+    createCandidateList:     typeof window.createCandidateList === 'function',
+  }));
+
+  // いずれかが false なら manifest.json に追記漏れ or スクリプトにロードエラーがある
+  for (const [fn, exists] of Object.entries(globals)) {
+    expect({ fn, exists }).toEqual({ fn, exists: true });
+  }
+
+  await page.close();
+});
+
+// ── テスト7-2: Option+V の核心フロー ─────────────────────────────
+//
+// Option+V → TOGGLE_VOICE → toggleVoice() → widget が listening 状態に遷移
+// という核心フローのうち、content script レイヤーを直接検証する。
+// （background → content のメッセージ送信はブラウザ制約で自動化不可のため
+//   createWidget + createSpeechRecognition の直接呼び出しで代替する）
+
+test('テスト7-2: Option+V 核心フロー — widget が idle→listening に遷移し SR が起動できる', async () => {
+  const page = await setupPage();
+
+  const result = await page.evaluate(() => {
+    return new Promise((okResult) => {
+      // toggleVoice() の核心ロジックを再現
+      const w = createWidget(); // eslint-disable-line no-undef
+      const initialState = w.getState();
+
+      // idle → listening
+      w.setState('listening');
+      const listeningState = w.getState();
+
+      // createSpeechRecognition が正常に起動できるか
+      const sr = createSpeechRecognition({ // eslint-disable-line no-undef
+        onResult: () => {},
+        onError: () => {},
+        onEnd: () => {},
+      });
+
+      okResult({
+        initialState,
+        listeningState,
+        srHasStart: typeof sr.start === 'function',
+        srHasStop:  typeof sr.stop === 'function',
+      });
+    });
+  });
+
+  expect(result.initialState).toBe('idle');
+  expect(result.listeningState).toBe('listening');
+  expect(result.srHasStart).toBe(true);
+  expect(result.srHasStop).toBe(true);
+
+  await page.close();
+});

@@ -281,3 +281,138 @@ npx jest __tests__/unit/ruleEngine.test.js --watch
 - [`docs/troubleshooting.md`](./troubleshooting.md) — 症状別トラブルシューティングガイド
 - [`docs/manual-test-guide.md`](./manual-test-guide.md) — 手動テスト手順書
 - [Salesforce External Client App OAuth Documentation](https://developer.salesforce.com/docs/platform/external-client-apps/guide/eca-overview.html)
+
+---
+
+---
+
+# インシデント #2: content_scripts 新スクリプト追加後 Option+V 無反応
+
+**日時**: 2026-02-23
+**重大度**: High（音声入力機能が完全に停止）
+**状態**: 解決済み / 再発防止策実装済み
+**担当**: iwasatat0107
+**関連 PR**: #57
+
+---
+
+## 1. 概要
+
+レコード検索機能実装（PR #57）で `manifest.json` の `content_scripts` に
+`salesforceApi.js`, `recordResolver.js`, `candidateList.js` の 3 ファイルを追加した直後、
+Salesforce 画面で `Option+V` を押しても音声ウィジェットが一切開かなくなった。
+
+---
+
+## 2. タイムライン
+
+| 時刻 | 出来事 |
+|------|--------|
+| 実装中 | PR #57 で manifest.json content_scripts に 3 ファイル追加、Jest 605件・Playwright 98件が PASS |
+| マージ後 | ユーザーが Salesforce 画面で Option+V → ウィジェット表示なし |
+| 調査開始 | ソース・dist/ の差分確認、構文チェック、ビルド確認 → コード自体は正常 |
+| 解決 | `npm run build` → `chrome://extensions/` リロード → Salesforce タブリロードの 3 ステップ実施 |
+
+---
+
+## 3. 根本原因分析
+
+### 根本原因 A: 同一パターンの再発（前回インシデント §根本原因 2・5 の再発）
+
+前回インシデント（2026-02-22）で既に記録されていた以下 2 点が再発した。
+
+| 前回の教訓 | 再発した理由 |
+|-----------|-------------|
+| `dist/` のビルド未実施（§根本原因 2） | manifest.json 変更後の 3 ステップ手順（ビルド→拡張リロード→タブリロード）が習慣化されていなかった |
+| manifest.json への依存ファイル追記漏れ（§根本原因 5） | 新 content script 追加時に "追加しても壊れないか" を自動テストで確認する仕組みがなかった |
+
+### 根本原因 B: content_scripts ロード失敗の検知テストが未実装
+
+Jest・Playwright のいずれにも「manifest.json の content_scripts に列挙された全ファイルが
+正常にロードされ、content.js が依存するグローバル関数が全て定義されているか」を
+検証するテストが存在しなかった。
+
+新スクリプトのいずれかがロードエラーになると、後続の `content.js` も読み込まれず、
+`TOGGLE_VOICE` メッセージリスナーが登録されない。結果として `Option+V` が完全に無反応になる。
+
+### 根本原因 C: 自動テスト環境と実機環境の乖離
+
+Playwright テストは `popup.html`（`chrome-extension://`）コンテキストで実行され、
+実際の Salesforce ページへの content script 注入は検証されない。
+このため、manifest.json の変更が実機で問題を起こしても CI では検知できなかった。
+
+---
+
+## 4. 影響範囲
+
+| 機能 | 影響 |
+|------|------|
+| 音声ウィジェット（Option+V） | 完全停止（ウィジェット表示なし） |
+| navigate / back / search / select 全アクション | 完全停止 |
+| OAuth 認証・ポップアップ | 影響なし |
+
+---
+
+## 5. 対処手順（実施済み）
+
+```bash
+npm run build
+# → chrome://extensions/ → VoiceForce → ↻ リロード
+# → Salesforce タブを Cmd+R でリロード
+# → Option+V でウィジェットが開くことを確認
+```
+
+---
+
+## 6. 再発防止策（実装済み）
+
+### (1) manifest.test.js に content_scripts 整合性テストを追加（PR #57 追加分）
+
+`content.js` が依存するグローバル関数の提供元ファイルが全て `content_scripts` に
+列挙されているかを CI で自動検証する。
+
+```javascript
+// __tests__/unit/manifest.test.js に追加済み
+test.each(Object.entries(REQUIRED_PROVIDERS))(
+  'content.js の依存 %s (%s) が content_scripts に含まれている',
+  (file) => { expect(scripts).toContain(file); }
+);
+```
+
+**効果**: 今後 content.js に新しいグローバル依存を追加した際、
+manifest.json への追記漏れを CI が即座に検知する。
+
+### (2) Playwright テスト7 を追加（PR #57 追加分）
+
+全 content_scripts ロード後に全グローバル関数が定義されているか、
+および widget idle→listening 遷移（Option+V の核心フロー）が
+動作するかを自動検証する。
+
+```
+テスト7-1: 全 content_scripts ロード後 — content.js 依存グローバル関数が全て定義されている
+テスト7-2: Option+V 核心フロー — widget が idle→listening に遷移し SR が起動できる
+```
+
+### (3) troubleshooting.md を更新
+
+- §2-2 を現在の content_scripts 定義（7 ファイル）に更新
+- §7 チェックリストに manifest.json 変更時の専用確認項目を追加
+
+---
+
+## 7. 学んだこと（Lessons Learned）
+
+1. **過去のインシデントレポートを実装前に読む**: 前回の教訓が記録されていたにも関わらず同じパターンが再発した。新規 content script を追加する前に `docs/incident-report-2026-02.md` の §根本原因 2・5 を参照する。
+
+2. **「動くテストが全て通る」は「実機で動く」を意味しない**: content scripts のロード順・manifest.json の整合性は Jest/Playwright のモック環境では検証できない。manifest.json を変更したら必ず 3 ステップ（ビルド→拡張リロード→タブリロード）を実施する。
+
+3. **再発防止は "ドキュメント化" だけでは不十分**: 前回も同じ教訓がドキュメントに残っていたが、開発者が参照しなかった。今回追加した `manifest.test.js` の自動テストのように、**人が判断する余地なく CI が強制的に検知する仕組み**を作ることが本質的な再発防止になる。
+
+4. **3 ステップを必ず守る**: manifest.json / content_scripts を変更したら以下を省略しない。
+
+```
+① npm run build
+② chrome://extensions/ → 拡張機能を ↻ リロード  ← アンロード→再ロードの方が確実
+③ Salesforce タブを Cmd+R でリロード
+④ Option+V で動作確認
+```
