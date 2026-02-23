@@ -167,6 +167,7 @@ describe('RuleEngine', () => {
       ['戻る'],
       ['バック'],
       ['前の画面'],
+      ['前に戻って'],
     ])('「%s」→ back', (input) => {
       expect(ruleEngine.match(input)).toEqual({ action: 'back' });
     });
