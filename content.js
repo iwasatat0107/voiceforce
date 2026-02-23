@@ -43,38 +43,10 @@ if (isSalesforceUrl) {
             const instanceUrl = result.instance_url || window.location.origin;
 
             if (intent.filterName) {
-              // ListView API でリストビュー ID を検索
-              try {
-                const token = await new Promise((resolve, reject) => {
-                  chrome.runtime.sendMessage({ type: 'GET_VALID_TOKEN' }, (res) => {
-                    if (res && res.success) resolve(res.token);
-                    else reject(new Error('token error'));
-                  });
-                });
-                const apiUrl = `${instanceUrl}/services/data/v59.0/sobjects/${intent.object}/listviews`;
-                const resp = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}` } });
-                const data = await resp.json();
-                const views = data.listviews || [];
-                // filterName に対応する検索キーワード（英語・日本語両対応）
-                const FILTER_KEYWORDS = {
-                  'All': ['all', '__all', 'すべて', '全て', '全部'],
-                  'RecentlyViewed': ['recent', '__recent', '最近'],
-                  'MyOpportunities': ['myopportunities', '自分', 'my'],
-                };
-                const keywords = FILTER_KEYWORDS[intent.filterName] || [intent.filterName.toLowerCase()];
-                const found = views.find(v => {
-                  const dn = v.developerName.toLowerCase();
-                  const lb = v.label.toLowerCase();
-                  return keywords.some(kw => dn.includes(kw) || lb.includes(kw));
-                });
-                const url = buildListUrl(instanceUrl, intent.object, found ? found.id : null); // eslint-disable-line no-undef
-                w.setState('success', { message: intent.message });
-                setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
-              } catch (_) {
-                const url = buildListUrl(instanceUrl, intent.object); // eslint-disable-line no-undef
-                w.setState('success', { message: intent.message });
-                setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
-              }
+              // filterName は Salesforce 標準 developerName（AllOpportunities, MyAccounts など）を直接使用
+              const url = buildListUrl(instanceUrl, intent.object, intent.filterName); // eslint-disable-line no-undef
+              w.setState('success', { message: intent.message });
+              setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
             } else {
               const url = buildListUrl(instanceUrl, intent.object); // eslint-disable-line no-undef
               w.setState('success', { message: intent.message });

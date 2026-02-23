@@ -57,8 +57,8 @@ test('ruleEngine: 商談一覧ナビゲーションパターン', async () => {
   });
 
   expect(result[0]).toMatchObject({ action: 'navigate', object: 'Opportunity' });
-  expect(result[1]).toMatchObject({ action: 'navigate', filterName: 'All' });
-  expect(result[2]).toMatchObject({ action: 'navigate', filterName: 'RecentlyViewed' });
+  expect(result[1]).toMatchObject({ action: 'navigate', filterName: 'AllOpportunities' });
+  expect(result[2]).toMatchObject({ action: 'navigate', filterName: 'Recent' });
   expect(result[3]).toMatchObject({ action: 'back' });
 
   await page.close();
@@ -80,7 +80,7 @@ test('ruleEngine: 誤認識語も正しくマッチする', async () => {
   });
 
   expect(result[0]).toMatchObject({ action: 'navigate', object: 'Opportunity' });
-  expect(result[1]).toMatchObject({ action: 'navigate', filterName: 'All' });
+  expect(result[1]).toMatchObject({ action: 'navigate', filterName: 'AllOpportunities' });
 
   await page.close();
 });
@@ -133,11 +133,11 @@ test('ruleEngine: リストビュー指定パターンのバリエーション',
     };
   });
 
-  expect(result.all1).toMatchObject({ filterName: 'All' });
-  expect(result.all2).toMatchObject({ filterName: 'All' });
-  expect(result.all3).toMatchObject({ filterName: 'All' });
-  expect(result.recent1).toMatchObject({ filterName: 'RecentlyViewed' });
-  expect(result.recent2).toMatchObject({ filterName: 'RecentlyViewed' });
+  expect(result.all1).toMatchObject({ filterName: 'AllOpportunities' });
+  expect(result.all2).toMatchObject({ filterName: 'AllOpportunities' });
+  expect(result.all3).toMatchObject({ filterName: 'AllOpportunities' });
+  expect(result.recent1).toMatchObject({ filterName: 'Recent' });
+  expect(result.recent2).toMatchObject({ filterName: 'Recent' });
   expect(result.mine1).toMatchObject({ filterName: 'MyOpportunities' });
   expect(result.mine2).toMatchObject({ filterName: 'MyOpportunities' });
   expect(result.mine3).toMatchObject({ filterName: 'MyOpportunities' });
