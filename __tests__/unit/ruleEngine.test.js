@@ -388,6 +388,35 @@ describe('RuleEngine', () => {
     });
   });
 
+  describe('search patterns - オブジェクト先行形式（逆順）', () => {
+    test.each([
+      ['取引先のABC株式会社を表示して', 'Account',     'ABC株式会社'],
+      ['商談の田中商事を開いて',        'Opportunity', '田中商事'],
+      ['取引先責任者の山田太郎を見せて', 'Contact',    '山田太郎'],
+      ['リードのテスト株式会社を表示して', 'Lead',     'テスト株式会社'],
+    ])('「%s」→ search/%s/keyword=%s', (input, object, keyword) => {
+      const result = ruleEngine.match(input);
+      expect(result).toEqual(expect.objectContaining({ action: 'search', object, keyword }));
+    });
+  });
+
+  describe('search patterns - オブジェクト指定なし（キャッチオール）', () => {
+    test.each([
+      ['ABC株式会社を表示して', 'Account', 'ABC株式会社'],
+      ['田中商事を見せて',      'Account', '田中商事'],
+      ['テスト商事を開いて',    'Account', 'テスト商事'],
+    ])('「%s」→ search/Account/keyword=%s', (input, object, keyword) => {
+      const result = ruleEngine.match(input);
+      expect(result).toEqual(expect.objectContaining({ action: 'search', object, keyword }));
+    });
+
+    test('オブジェクト名単独はキャッチオールにマッチしない（navigate が先）', () => {
+      // 「商談を開いて」は navigate であるべき
+      const result = ruleEngine.match('商談を開いて');
+      expect(result?.action).toBe('navigate');
+    });
+  });
+
   // ─── 入力長制限（Fix 11） ──────────────────────────────────────────────
   describe('入力長制限', () => {
     test('500文字 → 正常処理（マッチしない文字列だが null を返す）', () => {
