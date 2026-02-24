@@ -43,6 +43,64 @@ GitHub リポジトリ: **https://github.com/iwasatat0107/voiceforce**（Public�
 
 ---
 
+## CI/CD 絶対原則（必ず守ること）
+
+### ルール一覧
+
+| # | ルール | 理由 |
+|---|-------|------|
+| **R1** | **CI が赤の状態では新しい作業を始めない** | 赤の上に赤を重ねると根本原因が見えなくなる |
+| **R2** | **PR は CI 全ジョブ（Lint・Test・Build）PASS を確認してからマージする** | 失敗中の PR をマージすると develop が壊れ、全員がブロックされる |
+| **R3** | **セッション開始時に develop の CI 状態を確認する** | 前回セッションで CI が壊れたまま終わっていないかチェック |
+| **R4** | **Lint エラーは発生したその PR で即修正する。次の PR に持ち越さない** | 今回の失敗の根本原因（13件のエラーが長期間放置された） |
+| **R5** | **テストを「パスするように」書き換えることは禁止** | バグを隠すことになる。コード本体を修正すること |
+| **R6** | **`git push --no-verify` は緊急時のみ。必ず直後に CI PASS を確認すること** | フックを無効化する場合はその責任を負う |
+
+### セッション開始チェックリスト
+
+```bash
+# 1. develop の最新状態を取得
+git fetch origin && git reset --hard origin/develop
+
+# 2. ローカルで lint + test が通ることを確認
+npm run lint    # エラー 0件であること（warning は許容）
+npm test        # 全テスト PASS であること
+
+# 3. GitHub の develop ブランチの CI が緑であることをブラウザで確認
+#    https://github.com/iwasatat0107/voiceforce/commits/develop
+```
+
+もし手順 2 または 3 で失敗していたら、**新しい作業より先に修正する。**
+
+### pre-push フック（自動安全装置）
+
+`npm install`（または `npm run prepare`）を実行すると `.githooks/pre-push` が有効になり、
+**lint エラーまたはテスト失敗がある状態ではプッシュ自体がブロックされる。**
+
+```
+git push → .githooks/pre-push 実行
+             ├─ npm run lint  → エラーあり → プッシュ中断
+             ├─ npm test      → 失敗あり   → プッシュ中断
+             └─ 両方 OK       → プッシュ実行
+```
+
+フックが正しく設定されているか確認:
+```bash
+git config core.hooksPath   # → .githooks と表示されればOK
+```
+
+### CI が赤になったとき（インシデント対応）
+
+```
+1. 原因を特定する（gh run view でログを確認）
+2. hotfix/fix-xxx ブランチを作成して修正
+3. PR を作成 → CI PASS を確認 → develop にマージ
+4. feature ブランチが進行中であれば develop を取り込む（git merge origin/develop）
+5. 再発防止策を CLAUDE.md または テストに追加する
+```
+
+---
+
 ## 開発コマンド
 
 ```bash

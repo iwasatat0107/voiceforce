@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+# pre-push フック: プッシュ前に lint + test を自動実行
+#
+# CI で失敗する変更をリモートに送らないための安全装置。
+# このフックを通過しない限りプッシュは実行されない。
+#
+# インストール: npm run prepare（または git config core.hooksPath .githooks）
+# スキップ（緊急時のみ）: git push --no-verify
+#   ※ --no-verify を使う場合は必ず CI PASS を確認してからマージすること
+
+set -e
+
+echo ""
+echo "=== pre-push: CI チェック開始 ==="
+echo ""
+
+echo "--- 1/2  Lint ---"
+npm run lint
+echo "    Lint: OK"
+echo ""
+
+echo "--- 2/2  Test ---"
+npm test --silent
+echo "    Test: OK"
+echo ""
+
+echo "=== pre-push: 全チェック通過。プッシュを続行します。 ==="
+echo ""
