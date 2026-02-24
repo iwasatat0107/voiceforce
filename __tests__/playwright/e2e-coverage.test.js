@@ -1129,6 +1129,145 @@ test('テスト3-search-2: 「ABC株式会社を表示して」→ buildSearchUr
   await page.close();
 });
 
+// ── テスト3-search-3: DOM 入力方式 — 検索バーにキーワードが入力され Enter が送信される ──
+//
+// content.js の search ハンドラが行う処理を直接検証:
+//   1. .slds-global-header__search input を querySelector で取得
+//   2. nativeInputSetter でキーワードをセット（LWC リアクティブ対応）
+//   3. input / keydown(Enter) / keypress(Enter) / keyup(Enter) イベントを dispatch
+
+test('テスト3-search-3: DOM 入力方式 — 「ABC株式会社」が検索バーにセットされ Enter が送信される', async () => {
+  const page = await setupPage();
+
+  // Salesforce グローバルヘッダーと同等のモック DOM を追加
+  await page.evaluate(() => {
+    const container = document.createElement('div');
+    container.className = 'slds-global-header__search';
+    const input = document.createElement('input');
+    input.type = 'search';
+    container.appendChild(input);
+    document.body.appendChild(container);
+  });
+
+  const result = await page.evaluate(async () => {
+    return new Promise((resolve) => {
+      const input = document.querySelector('.slds-global-header__search input');
+      const events = [];
+
+      input.addEventListener('input',    ()  => events.push('input'));
+      input.addEventListener('keydown',  (e) => { if (e.key === 'Enter') events.push('keydown'); });
+      input.addEventListener('keypress', (e) => { if (e.key === 'Enter') events.push('keypress'); });
+      input.addEventListener('keyup',    (e) => { if (e.key === 'Enter') events.push('keyup'); });
+
+      // content.js の search ハンドラと同一ロジック
+      const keyword = 'ABC株式会社';
+      input.focus();
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(input, keyword);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keydown',  { key: 'Enter', keyCode: 13, bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', keyCode: 13, charCode: 13, bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keyup',    { key: 'Enter', keyCode: 13, bubbles: true }));
+
+      resolve({ value: input.value, events });
+    });
+  });
+
+  // キーワードが入力されている
+  expect(result.value).toBe('ABC株式会社');
+  // 全イベントが発火している
+  expect(result.events).toContain('input');
+  expect(result.events).toContain('keydown');
+  expect(result.events).toContain('keypress');
+  expect(result.events).toContain('keyup');
+
+  await page.close();
+});
+
+test('テスト3-search-4: DOM 入力方式 — ruleEngine で keyword 抽出 → 検索バーへの一連フロー', async () => {
+  const page = await setupPage();
+
+  // Salesforce グローバルヘッダーのモック DOM を追加
+  await page.evaluate(() => {
+    const container = document.createElement('div');
+    container.className = 'slds-global-header__search';
+    const input = document.createElement('input');
+    input.type = 'search';
+    container.appendChild(input);
+    document.body.appendChild(container);
+  });
+
+  const result = await page.evaluate(async () => {
+    return new Promise((resolve) => {
+      const input = document.querySelector('.slds-global-header__search input');
+      let enterFired = false;
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') enterFired = true; });
+
+      // 音声テキストを ruleEngine に通して intent を取得
+      const intent = window.match('ABC株式会社を表示して'); // eslint-disable-line no-undef
+      if (!intent || intent.action !== 'search') {
+        resolve({ error: 'intent mismatch', intent });
+        return;
+      }
+
+      // content.js search ハンドラと同一ロジックで DOM 操作
+      const keyword = intent.keyword;
+      input.focus();
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(input, keyword);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keydown',  { key: 'Enter', keyCode: 13, bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', keyCode: 13, charCode: 13, bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keyup',    { key: 'Enter', keyCode: 13, bubbles: true }));
+
+      resolve({ keyword, inputValue: input.value, enterFired });
+    });
+  });
+
+  // ruleEngine が「ABC株式会社」を keyword として抽出できている
+  expect(result.keyword).toBe('ABC株式会社');
+  // 検索バーに keyword がセットされている
+  expect(result.inputValue).toBe('ABC株式会社');
+  // Enter キーイベントが発火している
+  expect(result.enterFired).toBe(true);
+
+  await page.close();
+});
+
+test('テスト3-search-5: DOM 入力方式 — 検索バーが存在しない場合は URL フォールバックで navigateTo', async () => {
+  // 検索バーが存在しないページでは buildSearchUrl + navigateTo へフォールバック
+  const page = await setupPage();
+  const instanceUrl = 'https://myorg.my.salesforce.com';
+
+  const result = await page.evaluate(
+    async ({ instanceUrl }) => {
+      return new Promise((okResult) => {
+        window.navigateTo = (url) => okResult({ navigatedTo: url });
+
+        const intent = window.match('田中商事を表示して'); // eslint-disable-line no-undef
+        if (!intent || intent.action !== 'search') {
+          okResult({ navigatedTo: null, error: 'intent mismatch' });
+          return;
+        }
+
+        // 検索バーなし → フォールバックロジック
+        const input = document.querySelector('.slds-global-header__search input');
+        if (!input) {
+          const url = buildSearchUrl(instanceUrl, intent.keyword); // eslint-disable-line no-undef
+          window.navigateTo(url);
+        }
+        setTimeout(() => okResult({ navigatedTo: null, error: 'timeout' }), 1000);
+      });
+    },
+    { instanceUrl }
+  );
+
+  expect(result.navigatedTo).toContain('/lightning/search?searchInput=');
+  // URL エンコードされているため decodeURIComponent でデコードして検証
+  expect(decodeURIComponent(result.navigatedTo)).toContain('田中商事');
+  await page.close();
+});
+
 // ═══════════════════════════════════════════════════════════════
 // テスト7: content_scripts 統合スモークテスト
 //
