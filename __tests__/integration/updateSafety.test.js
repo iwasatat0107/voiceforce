@@ -30,14 +30,6 @@ function mockFetchNoContent() {
   });
 }
 
-function mockFetchError(status, body) {
-  global.fetch.mockResolvedValueOnce({
-    ok:     false,
-    status,
-    json:   async () => body || [{ errorCode: 'UNKNOWN', message: 'error' }],
-  });
-}
-
 // ---------------------------------------------------------------------------
 // セットアップ / ティアダウン
 // ---------------------------------------------------------------------------

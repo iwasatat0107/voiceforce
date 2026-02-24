@@ -844,7 +844,7 @@ test('テスト6: XSS — <script>タグ発話でアラートが実行されな�
       });
       w.setState('listening');
       sr.start();
-      window.__triggerSpeech('<script>alert("XSS")<\/script>');
+      window.__triggerSpeech('<script>alert("XSS")</script>');
     });
   });
 
@@ -885,7 +885,7 @@ test('テスト6: XSS — onerror 付き img タグでアラートが実行さ�
 
 test('テスト6: XSS — XSSペイロードがウィジェット DOM に textContent として安全にレンダリングされる', async () => {
   const page = await setupPage();
-  const xssPayload = '<script>alert("XSS")<\/script>';
+  const xssPayload = '<script>alert("XSS")</script>';
 
   const result = await page.evaluate(async (payload) => {
     return new Promise((resolve) => {
@@ -940,7 +940,7 @@ test('テスト6: XSS — javascript: URI スキームで alert が実行され�
       });
       w.setState('listening');
       sr.start();
-      window.__triggerSpeech('javascript:alert(1)');
+      window.__triggerSpeech('javascript:alert(1)'); // eslint-disable-line no-script-url
     });
   });
 
