@@ -402,9 +402,13 @@ describe('RuleEngine', () => {
 
   describe('search patterns - オブジェクト指定なし（キャッチオール）', () => {
     test.each([
-      ['ABC株式会社を表示して', 'Account', 'ABC株式会社'],
-      ['田中商事を見せて',      'Account', '田中商事'],
-      ['テスト商事を開いて',    'Account', 'テスト商事'],
+      ['ABC株式会社を表示して',   'Account', 'ABC株式会社'],
+      ['田中商事を見せて',        'Account', '田中商事'],
+      ['テスト商事を開いて',      'Account', 'テスト商事'],
+      ['ABC株式会社を検索して',   'Account', 'ABC株式会社'],
+      ['田中商事を探して',        'Account', '田中商事'],
+      ['ABC 株式会社を検索して',  'Account', 'ABC 株式会社'],
+      ['ABC株式会社を検索してください', 'Account', 'ABC株式会社'],
     ])('「%s」→ search/Account/keyword=%s', (input, object, keyword) => {
       const result = ruleEngine.match(input);
       expect(result).toEqual(expect.objectContaining({ action: 'search', object, keyword }));
