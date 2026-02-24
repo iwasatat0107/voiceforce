@@ -82,18 +82,14 @@ const MOCK_SPEECH_SCRIPT = `
 
 // ── 拡張機能スクリプト読み込みヘルパー ──────────────────────────
 // content_scripts の読み込み順に合わせる:
-//   lib/ruleEngine.js → lib/navigator.js → lib/speechRecognition.js
-//   → lib/salesforceApi.js → lib/recordResolver.js → ui/widget.js → ui/candidateList.js
+//   lib/ruleEngine.js → lib/navigator.js → lib/speechRecognition.js → ui/widget.js
 async function loadExtensionScripts(page, extId) {
   await page.evaluate(async (id) => {
     const scripts = [
       'lib/ruleEngine.js',
       'lib/navigator.js',
       'lib/speechRecognition.js',
-      'lib/salesforceApi.js',
-      'lib/recordResolver.js',
       'ui/widget.js',
-      'ui/candidateList.js',
     ];
     for (const src of scripts) {
       const s = document.createElement('script');
@@ -1068,20 +1064,18 @@ test('テスト6: トークン暗号化 — IV が存在する場合はトーク
 });
 
 // ═══════════════════════════════════════════════════════════════
-// テスト3-search: レコード検索フロー
+// テスト3-search: レコード検索フロー（グローバル検索 URL ナビゲーション）
 // ═══════════════════════════════════════════════════════════════
 
-// ── テスト3-search-1: SOSL 単一結果 → 自動遷移 ──────────────────
+// ── テスト3-search-1: 「田中商事の商談を開いて」→ グローバル検索 URL へ遷移 ──
 
-test('テスト3-search-1: 「田中商事の商談」→ 1件ヒット → buildRecordUrl で navigateTo', async () => {
+test('テスト3-search-1: 「田中商事の商談を開いて」→ buildSearchUrl で navigateTo', async () => {
   const page = await setupPage();
   const instanceUrl = 'https://myorg.my.salesforce.com';
 
   const result = await page.evaluate(
     async ({ instanceUrl }) => {
       return new Promise((okResult) => {
-        // sosl をモック（1件返す）
-        window.sosl = async () => [{ Id: '006xxx', Name: '田中商事 商談' }];
         window.navigateTo = (url) => okResult({ navigatedTo: url });
 
         const intent = window.match('田中商事の商談を開いて');
@@ -1090,16 +1084,8 @@ test('テスト3-search-1: 「田中商事の商談」→ 1件ヒット → buil
           return;
         }
 
-        (async () => {
-          const records = await window.sosl(instanceUrl, 'token', intent.keyword, intent.object, ['Id', 'Name']);
-          const resolved = window.resolve(records); // eslint-disable-line no-undef
-          if (resolved.category === 'single') {
-            const url = buildRecordUrl(instanceUrl, intent.object, resolved.record.Id); // eslint-disable-line no-undef
-            window.navigateTo(url);
-          } else {
-            okResult({ navigatedTo: null, category: resolved.category });
-          }
-        })();
+        const url = buildSearchUrl(instanceUrl, intent.keyword); // eslint-disable-line no-undef
+        window.navigateTo(url);
 
         setTimeout(() => okResult({ navigatedTo: null, error: 'timeout' }), 2000);
       });
@@ -1107,49 +1093,15 @@ test('テスト3-search-1: 「田中商事の商談」→ 1件ヒット → buil
     { instanceUrl }
   );
 
-  expect(result.navigatedTo).toBe('https://myorg.my.salesforce.com/lightning/r/Opportunity/006xxx/view');
-  await page.close();
-});
-
-// ── テスト3-search-2: SOSL 複数結果 → candidateList 表示 ──────────
-
-test('テスト3-search-2: 「田中の取引先」→ 3件ヒット → candidateList に番号表示', async () => {
-  const page = await setupPage();
-  const instanceUrl = 'https://myorg.my.salesforce.com';
-
-  await page.evaluate(
-    async ({ instanceUrl }) => {
-      window.sosl = async () => [
-        { Id: '001a', Name: '田中商事' },
-        { Id: '001b', Name: '田中物産' },
-        { Id: '001c', Name: '田中電機' },
-      ];
-
-      const intent = window.match('田中の取引先を開いて');
-      if (!intent || intent.action !== 'search') return;
-
-      const records = await window.sosl(instanceUrl, 'token', intent.keyword, intent.object, ['Id', 'Name']);
-      const resolved = window.resolve(records); // eslint-disable-line no-undef
-      if (resolved.category === 'multiple') {
-        const cl = createCandidateList(); // eslint-disable-line no-undef
-        cl.show(resolved.candidates, () => {});
-      }
-    },
-    { instanceUrl }
+  expect(result.navigatedTo).toBe(
+    'https://myorg.my.salesforce.com/lightning/search?searchInput=%E7%94%B0%E4%B8%AD%E5%95%86%E4%BA%8B'
   );
-
-  const listVisible = await page.locator('#vfa-candidate-list').isVisible();
-  expect(listVisible).toBe(true);
-
-  const items = page.locator('#vfa-candidate-list [role="listitem"]');
-  await expect(items).toHaveCount(3);
-
   await page.close();
 });
 
-// ── テスト3-search-3: 候補選択後に遷移 ───────────────────────────
+// ── テスト3-search-2: 「ABC株式会社を表示して」→ グローバル検索 URL へ遷移 ──
 
-test('テスト3-search-3: candidateList表示後「2番」→ 2件目レコードに遷移', async () => {
+test('テスト3-search-2: 「ABC株式会社を表示して」→ buildSearchUrl で navigateTo', async () => {
   const page = await setupPage();
   const instanceUrl = 'https://myorg.my.salesforce.com';
 
@@ -1158,20 +1110,14 @@ test('テスト3-search-3: candidateList表示後「2番」→ 2件目レコー�
       return new Promise((okResult) => {
         window.navigateTo = (url) => okResult({ navigatedTo: url });
 
-        const candidates = [
-          { Id: '001a', Name: '田中商事' },
-          { Id: '001b', Name: '田中物産' },
-          { Id: '001c', Name: '田中電機' },
-        ];
+        const intent = window.match('ABC株式会社を表示して');
+        if (!intent || intent.action !== 'search') {
+          okResult({ navigatedTo: null, error: 'intent mismatch' });
+          return;
+        }
 
-        const cl = createCandidateList(); // eslint-disable-line no-undef
-        cl.show(candidates, (_idx, record) => {
-          const url = buildRecordUrl(instanceUrl, 'Account', record.Id); // eslint-disable-line no-undef
-          cl.hide();
-          window.navigateTo(url);
-        });
-
-        cl.selectByNumber(2);
+        const url = buildSearchUrl(instanceUrl, intent.keyword); // eslint-disable-line no-undef
+        window.navigateTo(url);
 
         setTimeout(() => okResult({ navigatedTo: null, error: 'timeout' }), 2000);
       });
@@ -1179,34 +1125,7 @@ test('テスト3-search-3: candidateList表示後「2番」→ 2件目レコー�
     { instanceUrl }
   );
 
-  expect(result.navigatedTo).toBe('https://myorg.my.salesforce.com/lightning/r/Account/001b/view');
-  await page.close();
-});
-
-// ── テスト3-search-4: 0件ヒット → NOT_FOUND メッセージ ──────────
-
-test('テスト3-search-4: 「存在しないXXXの商談」→ 0件 → NOT_FOUNDメッセージ', async () => {
-  const page = await setupPage();
-  const instanceUrl = 'https://myorg.my.salesforce.com';
-
-  const result = await page.evaluate(
-    async ({ instanceUrl }) => {
-      window.sosl = async () => [];
-
-      const intent = window.match('存在しないXXXの商談を開いて');
-      if (!intent || intent.action !== 'search') return { category: null, error: 'intent mismatch' };
-
-      const records = await window.sosl(instanceUrl, 'token', intent.keyword, intent.object, ['Id', 'Name']);
-      const resolved = window.resolve(records); // eslint-disable-line no-undef
-      return { category: resolved.category, message: resolved.message };
-    },
-    { instanceUrl }
-  );
-
-  expect(result.category).toBe('not_found');
-  expect(typeof result.message).toBe('string');
-  expect(result.message.length).toBeGreaterThan(0);
-
+  expect(result.navigatedTo).toContain('/lightning/search?searchInput=ABC');
   await page.close();
 });
 
@@ -1239,17 +1158,12 @@ test('テスト7-1: 全 content_scripts ロード後 — content.js 依存グロ
     navigateTo:              typeof window.navigateTo === 'function',
     buildListUrl:            typeof window.buildListUrl === 'function',
     buildRecordUrl:          typeof window.buildRecordUrl === 'function',
+    buildSearchUrl:          typeof window.buildSearchUrl === 'function',
     goBack:                  typeof window.goBack === 'function',
     // lib/speechRecognition.js
     createSpeechRecognition: typeof window.createSpeechRecognition === 'function',
-    // lib/salesforceApi.js
-    sosl:                    typeof window.sosl === 'function',
-    // lib/recordResolver.js
-    resolve:                 typeof window.resolve === 'function',
     // ui/widget.js
     createWidget:            typeof window.createWidget === 'function',
-    // ui/candidateList.js
-    createCandidateList:     typeof window.createCandidateList === 'function',
   }));
 
   // いずれかが false なら manifest.json に追記漏れ or スクリプトにロードエラーがある

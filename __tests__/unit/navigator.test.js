@@ -9,6 +9,7 @@ const {
   buildListUrl,
   buildRecordUrl,
   buildNewUrl,
+  buildSearchUrl,
   navigateTo,
   goBack,
   SF_URL_PATTERNS,
@@ -246,6 +247,22 @@ describe('navigateTo', () => {
     // jsdom 環境では window が存在するため navigateTo は location.href をセットしようとする可能性がある
     // 明示的に null を渡すケースのみを検証する
     expect(() => navigateTo('https://example.com', null)).not.toThrow();
+  });
+});
+
+// ── buildSearchUrl ─────────────────────────────────────────────────────────
+describe('buildSearchUrl', () => {
+  test('キーワードを encodeURIComponent してグローバル検索 URL を生成する', () => {
+    expect(buildSearchUrl('https://myorg.my.salesforce.com', 'ABC株式会社'))
+      .toBe('https://myorg.my.salesforce.com/lightning/search?searchInput=ABC%E6%A0%AA%E5%BC%8F%E4%BC%9A%E7%A4%BE');
+  });
+  test('スペースを含むキーワードもエンコードする', () => {
+    expect(buildSearchUrl('https://myorg.my.salesforce.com', '田中 太郎'))
+      .toBe('https://myorg.my.salesforce.com/lightning/search?searchInput=%E7%94%B0%E4%B8%AD%20%E5%A4%AA%E9%83%8E');
+  });
+  test('ASCII キーワードはそのまま残る', () => {
+    expect(buildSearchUrl('https://myorg.my.salesforce.com', 'ABC'))
+      .toBe('https://myorg.my.salesforce.com/lightning/search?searchInput=ABC');
   });
 });
 
