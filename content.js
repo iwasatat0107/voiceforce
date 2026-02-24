@@ -12,14 +12,14 @@ if (isSalesforceUrl) {
   let activeCandidateSession = null;
   let candidateListUI = null;
 
-  function getWidget() {
+  const getWidget = function() {
     if (!widget && typeof createWidget === 'function') { // eslint-disable-line no-undef
       widget = createWidget(); // eslint-disable-line no-undef
     }
     return widget;
   }
 
-  function getCandidateList() {
+  const getCandidateList = function() {
     if (!candidateListUI && typeof createCandidateList === 'function') { // eslint-disable-line no-undef
       candidateListUI = createCandidateList(); // eslint-disable-line no-undef
     }
@@ -36,7 +36,7 @@ if (isSalesforceUrl) {
     Event:       ['Id', 'Subject'],
   };
 
-  async function handleSearch(intent, w) {
+  const handleSearch = async function(intent, w) {
     // トークン取得
     const token = await new Promise((ok, fail) => {
       chrome.runtime.sendMessage({ type: 'GET_VALID_TOKEN' }, (res) => {
@@ -85,7 +85,7 @@ if (isSalesforceUrl) {
     }
   }
 
-  function toggleVoice() {
+  const toggleVoice = function() {
     const w = getWidget();
     if (!w) return;
 
