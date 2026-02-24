@@ -100,6 +100,7 @@ if (isSalesforceUrl) {
               // トークンエラー（未接続・期限切れ）はフォールバック遷移
               const isTokenErr = !err.message || err.message.includes('トークン') ||
                 err.message.includes('token') || err.message.includes('Receiving end') ||
+                err.message.includes('message channel') || err.message.includes('closed') ||
                 err.message.includes('unauthorized') || err.message.includes('INVALID_SESSION');
               if (isTokenErr) {
                 w.setState('success', { message: `「${keyword}」を検索します（再接続を推奨）` });

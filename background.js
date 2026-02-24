@@ -20,28 +20,28 @@ function handleMessage(message, sender, sendResponse) {
         return false;
       }
       startOAuth(clientId, instanceUrl, clientSecret)
-        .then(() => sendResponse({ success: true }))
-        .catch((err) => sendResponse({ success: false, error: err.message }));
+        .then(() => { sendResponse({ success: true }); void chrome.runtime.lastError; })
+        .catch((err) => { sendResponse({ success: false, error: err.message }); void chrome.runtime.lastError; });
       return true; // 非同期レスポンスのため
     }
 
     case 'DISCONNECT_SALESFORCE':
       disconnect()
-        .then(() => sendResponse({ success: true }))
-        .catch((err) => sendResponse({ success: false, error: err.message }));
+        .then(() => { sendResponse({ success: true }); void chrome.runtime.lastError; })
+        .catch((err) => { sendResponse({ success: false, error: err.message }); void chrome.runtime.lastError; });
       return true;
 
     case 'GET_STATUS':
       isConnected()
         .then((connected) => getInstanceUrl().then((url) => ({ connected, instanceUrl: url })))
-        .then((status) => sendResponse({ success: true, ...status }))
-        .catch((err) => sendResponse({ success: false, error: err.message }));
+        .then((status) => { sendResponse({ success: true, ...status }); void chrome.runtime.lastError; })
+        .catch((err) => { sendResponse({ success: false, error: err.message }); void chrome.runtime.lastError; });
       return true;
 
     case 'GET_VALID_TOKEN':
       getValidToken()
-        .then((token) => sendResponse({ success: true, token }))
-        .catch((err) => sendResponse({ success: false, error: err.message }));
+        .then((token) => { sendResponse({ success: true, token }); void chrome.runtime.lastError; })
+        .catch((err) => { sendResponse({ success: false, error: err.message }); void chrome.runtime.lastError; });
       return true;
 
     case 'NAVIGATE_TO_SEARCH': {
@@ -50,9 +50,17 @@ function handleMessage(message, sender, sendResponse) {
         sendResponse({ success: false, error: 'invalid keyword' });
         return false;
       }
-      const tabOrigin = new URL(sender.tab.url).origin;
-      const searchUrl = `${tabOrigin}/lightning/search?searchInput=${encodeURIComponent(keyword)}`;
-      chrome.tabs.update(sender.tab.id, { url: searchUrl });
+      if (!sender.tab) {
+        sendResponse({ success: false, error: 'no tab' });
+        return false;
+      }
+      try {
+        const tabOrigin = new URL(sender.tab.url).origin;
+        const searchUrl = `${tabOrigin}/lightning/search?searchInput=${encodeURIComponent(keyword)}`;
+        chrome.tabs.update(sender.tab.id, { url: searchUrl });
+      } catch (e) {
+        console.error('[VF] NAVIGATE_TO_SEARCH error:', e.message);
+      }
       return false;
     }
 
@@ -68,7 +76,8 @@ chrome.commands.onCommand.addListener((command) => {
   if (command === 'toggle-voice') {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]) {
-        chrome.tabs.sendMessage(tabs[0].id, { type: 'TOGGLE_VOICE' });
+        chrome.tabs.sendMessage(tabs[0].id, { type: 'TOGGLE_VOICE' })
+          .catch(() => {}); // content script 未ロードのタブでは無視
       }
     });
   }
