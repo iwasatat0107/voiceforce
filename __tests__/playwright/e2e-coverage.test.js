@@ -81,15 +81,20 @@ const MOCK_SPEECH_SCRIPT = `
 `;
 
 // ── 拡張機能スクリプト読み込みヘルパー ──────────────────────────
-// content_scripts の読み込み順に合わせる:
-//   lib/ruleEngine.js → lib/navigator.js → lib/speechRecognition.js → ui/widget.js
+// content_scripts の読み込み順に合わせる（manifest.json と必ず一致させること）:
+//   lib/ruleEngine.js → lib/navigator.js → lib/speechRecognition.js
+//   → lib/salesforceApi.js → lib/recordResolver.js
+//   → ui/widget.js → ui/candidateList.js
 async function loadExtensionScripts(page, extId) {
   await page.evaluate(async (id) => {
     const scripts = [
       'lib/ruleEngine.js',
       'lib/navigator.js',
       'lib/speechRecognition.js',
+      'lib/salesforceApi.js',
+      'lib/recordResolver.js',
       'ui/widget.js',
+      'ui/candidateList.js',
     ];
     for (const src of scripts) {
       const s = document.createElement('script');
@@ -1193,39 +1198,33 @@ test('テスト3-search-4: 「田中商事の商談を開いて」→ NAVIGATE_T
   await page.close();
 });
 
-test('テスト3-search-5: search intent → ウィジェットが success 状態になり sendMessage が呼ばれる', async () => {
+test('テスト3-search-5: search intent → ウィジェットが processing 状態になる', async () => {
+  // content.js の search ハンドラは SOSL API を呼ぶ前に processing に遷移する
+  // API 呼び出しは別途モックなしでは実行できないため、状態遷移のみを検証する
   const page = await setupPage();
 
-  const result = await page.evaluate(async () => {
-    return new Promise((resolve) => {
+  const state = await page.evaluate(async () => {
+    return new Promise((okResult) => {
       const w = createWidget(); // eslint-disable-line no-undef
       w.setState('listening');
-
-      const originalSend = chrome.runtime.sendMessage.bind(chrome.runtime);
-      chrome.runtime.sendMessage = (msg) => {
-        if (msg && msg.type === 'NAVIGATE_TO_SEARCH') {
-          resolve({ widgetState: w.getState(), keyword: msg.keyword });
-        }
-        return originalSend(msg);
-      };
 
       const sr = createSpeechRecognition({ // eslint-disable-line no-undef
         onResult: (transcript) => {
           const intent = window.match(transcript); // eslint-disable-line no-undef
           if (intent && intent.action === 'search') {
-            w.setState('success', { message: `「${intent.keyword}」を検索します` });
-            chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword: intent.keyword });
+            // content.js と同じ: processing に遷移してから非同期処理
+            w.setState('processing', { message: `「${intent.keyword}」を検索中...` });
           }
+          okResult(w.getState());
         },
       });
       sr.start();
       window.__triggerSpeech('ABC株式会社を表示して');
-      setTimeout(() => resolve({ error: 'timeout' }), 2000);
+      setTimeout(() => okResult('timeout'), 1000);
     });
   });
 
-  expect(result.widgetState).toBe('success');
-  expect(result.keyword).toBe('ABC株式会社');
+  expect(state).toBe('processing');
   await page.close();
 });
 
@@ -1262,8 +1261,14 @@ test('テスト7-1: 全 content_scripts ロード後 — content.js 依存グロ
     goBack:                  typeof window.goBack === 'function',
     // lib/speechRecognition.js
     createSpeechRecognition: typeof window.createSpeechRecognition === 'function',
+    // lib/salesforceApi.js
+    sosl:                    typeof window.sosl === 'function',
+    // lib/recordResolver.js
+    resolve:                 typeof window.resolve === 'function',
     // ui/widget.js
     createWidget:            typeof window.createWidget === 'function',
+    // ui/candidateList.js
+    createCandidateList:     typeof window.createCandidateList === 'function',
   }));
 
   // いずれかが false なら manifest.json に追記漏れ or スクリプトにロードエラーがある
@@ -1315,5 +1320,153 @@ test('テスト7-2: Option+V 核心フロー — widget が idle→listening に
   expect(result.srHasStart).toBe(true);
   expect(result.srHasStop).toBe(true);
 
+  await page.close();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// テスト3-search-6〜8: SOSL 検索フロー（モック使用）
+//
+// 背景: salesforceApi.js / recordResolver.js が manifest.json に
+//       追加されたことで、content.js から sosl() / resolve() が
+//       呼べるようになった。
+// テスト方針: window.sosl をモックし、recordResolver.resolve() の
+//       分岐ロジック（0件/1件/複数件）ごとに正しい動作を検証する。
+// ═══════════════════════════════════════════════════════════════
+
+test('テスト3-search-6: SOSL 1件ヒット → buildRecordUrl で navigateTo が呼ばれる', async () => {
+  const page = await setupPage();
+  const instanceUrl = 'https://myorg.my.salesforce.com';
+  const recordId = '001000000000001AAA';
+
+  const result = await page.evaluate(
+    async ({ instanceUrl, recordId }) => {
+      return new Promise((okResult) => {
+        // sosl をモック（1件ヒット）
+        window.sosl = () => Promise.resolve([{ Id: recordId, Name: 'ABC株式会社' }]);
+        window.navigateTo = (url) => okResult({ navigatedTo: url });
+
+        const intent = window.match('ABC株式会社を検索して'); // eslint-disable-line no-undef
+        if (!intent || intent.action !== 'search') {
+          okResult({ error: 'intent mismatch' });
+          return;
+        }
+
+        const keyword = intent.keyword;
+        const sfObject = intent.object || 'Account';
+
+        window.sosl(instanceUrl, 'dummy-token', keyword, sfObject)
+          .then((records) => {
+            const resolved = window.resolve(records); // eslint-disable-line no-undef
+            if (resolved.category === 'single') {
+              const url = buildRecordUrl(instanceUrl, sfObject, resolved.record.Id); // eslint-disable-line no-undef
+              window.navigateTo(url);
+            } else {
+              okResult({ error: `unexpected category: ${resolved.category}` });
+            }
+          });
+
+        setTimeout(() => okResult({ error: 'timeout' }), 2000);
+      });
+    },
+    { instanceUrl, recordId }
+  );
+
+  expect(result.navigatedTo).toContain(recordId);
+  expect(result.navigatedTo).toContain('/Account/');
+  await page.close();
+});
+
+test('テスト3-search-7: SOSL 0件 → resolve が not_found を返す', async () => {
+  const page = await setupPage();
+
+  const result = await page.evaluate(async () => {
+    return new Promise((okResult) => {
+      window.sosl = () => Promise.resolve([]);
+
+      window.sosl('https://myorg.my.salesforce.com', 'dummy', '存在しない会社', 'Account')
+        .then((records) => {
+          const resolved = window.resolve(records); // eslint-disable-line no-undef
+          okResult({ category: resolved.category, message: resolved.message });
+        });
+
+      setTimeout(() => okResult({ error: 'timeout' }), 2000);
+    });
+  });
+
+  expect(result.category).toBe('not_found');
+  expect(result.message).toContain('見つかりませんでした');
+  await page.close();
+});
+
+test('テスト3-search-8: SOSL 複数件 → resolve が multiple を返す', async () => {
+  const page = await setupPage();
+
+  const result = await page.evaluate(async () => {
+    return new Promise((okResult) => {
+      window.sosl = () => Promise.resolve([
+        { Id: '001000000000001AAA', Name: '田中商事A' },
+        { Id: '001000000000002AAA', Name: '田中商事B' },
+        { Id: '001000000000003AAA', Name: '田中商事C' },
+      ]);
+
+      window.sosl('https://myorg.my.salesforce.com', 'dummy', '田中商事', 'Account')
+        .then((records) => {
+          const resolved = window.resolve(records); // eslint-disable-line no-undef
+          okResult({
+            category:       resolved.category,
+            candidateCount: resolved.candidates.length,
+            message:        resolved.message,
+          });
+        });
+
+      setTimeout(() => okResult({ error: 'timeout' }), 2000);
+    });
+  });
+
+  expect(result.category).toBe('multiple');
+  expect(result.candidateCount).toBe(3);
+  expect(result.message).toContain('3件');
+  await page.close();
+});
+
+test('テスト3-search-9: SW keepalive — setInterval が登録されリスニング中に STAY_ALIVE を送信する', async () => {
+  // content.js の startKeepalive() ロジックを直接検証する
+  // keepaliveTimer は 10秒ごとだが、テスト内でインターバルをシミュレート
+  const page = await setupPage();
+
+  const result = await page.evaluate(async () => {
+    return new Promise((okResult) => {
+      const messages = [];
+      const originalSend = chrome.runtime.sendMessage.bind(chrome.runtime);
+      chrome.runtime.sendMessage = (msg) => {
+        messages.push(msg);
+        return originalSend(msg);
+      };
+
+      // startKeepalive() のロジックを直接テスト
+      let timer = null;
+      const startKeepalive = () => {
+        if (timer) return;
+        timer = setInterval(() => {
+          chrome.runtime.sendMessage({ type: 'STAY_ALIVE' }).catch(() => {});
+        }, 50); // テスト用に 50ms に短縮
+      };
+      const stopKeepalive = () => {
+        if (timer) { clearInterval(timer); timer = null; }
+      };
+
+      startKeepalive();
+
+      // 120ms 後に停止（50ms × 2〜3 回は発火する）
+      setTimeout(() => {
+        stopKeepalive();
+        const stayAliveCount = messages.filter(m => m.type === 'STAY_ALIVE').length;
+        okResult({ stayAliveCount, timerStopped: timer === null });
+      }, 120);
+    });
+  });
+
+  expect(result.stayAliveCount).toBeGreaterThanOrEqual(1);
+  expect(result.timerStopped).toBe(true);
   await page.close();
 });

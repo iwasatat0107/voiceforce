@@ -416,3 +416,145 @@ manifest.json への追記漏れを CI が即座に検知する。
 ③ Salesforce タブを Cmd+R でリロード
 ④ Option+V で動作確認
 ```
+
+---
+
+---
+
+# インシデント #3: 音声検索が「認識: ...」で止まる・トークンエラー
+
+**日時**: 2026-02-24 〜 2026-02-25
+**重大度**: High（音声検索機能が完全に動作しない）
+**状態**: 解決済み / 再発防止策実装済み
+**担当**: iwasatat0107
+**関連 PR**: #62〜#66, #67
+
+---
+
+## 1. 概要
+
+「ABC株式会社を表示して」「ABC株式会社を検索して」と発話しても以下の問題が発生した。
+
+1. **ウィジェットに「認識: ABC株式会社を表示して」と表示される**（intent が null）
+2. **「VFトークンの取得に失敗しました」エラー**（SW が終了済みのため）
+3. **sosl is not defined**（manifest.json に salesforceApi.js が未記載）
+
+---
+
+## 2. タイムライン
+
+| 出来事 | 対応 PR |
+|--------|---------|
+| 「を検索して」フレーズが ruleEngine にマッチしない | #66 |
+| manifest.json に salesforceApi.js / recordResolver.js / candidateList.js が未記載 → sosl is not defined | #67 |
+| SW が発話認識中（~10秒）に idle 終了 → GET_VALID_TOKEN 失敗 | #67 |
+| background.js で sendResponse 後に chrome.runtime.lastError が未確認 | #66 |
+
+---
+
+## 3. 根本原因分析
+
+### 根本原因 A: ruleEngine の VERB に「検索して」「探して」が未登録
+
+音声認識が返す文字列に「を検索して」「を探して」が含まれるケースがあったが、
+`VERB = '(出して|開いて|見せて|表示して|表示|開く|開け)'` に含まれていなかった。
+
+**なぜ VERB に追加しなかったか**: VERB を navigate パターンと共用しているため、
+「商談を検索して」が誤って navigate にマッチする危険があった。
+**修正**: search ブロック専用の別パターンとして追加。
+
+```javascript
+// lib/ruleEngine.js — オブジェクト指定なし検索ブロックに追加
+new RegExp('^(.+?)を(検索|探)(して|してください)?$'),
+```
+
+### 根本原因 B: manifest.json に salesforceApi.js / recordResolver.js / candidateList.js が未記載
+
+SOSL 検索を実装した際（PR #65）、`content.js` に `sosl()`, `resolve()` の呼び出しを追加したが
+`manifest.json` の `content_scripts` への追記を忘れた。
+
+**なぜ CI が検知できなかったか**: `manifest.test.js` の `REQUIRED_PROVIDERS` テーブルに
+これらのファイルが含まれていなかった。
+
+**修正**:
+1. `manifest.json` の `content_scripts.js` に 3 ファイルを追加
+2. `manifest.test.js` の `REQUIRED_PROVIDERS` に 3 エントリを追加
+
+**これはインシデント #2 と全く同一パターンの再発。**
+新しいグローバル関数依存を `content.js` に追加したら **必ず** `REQUIRED_PROVIDERS` を更新すること。
+
+### 根本原因 C: MV3 Service Worker が発話認識中に idle 終了
+
+MV3 の Service Worker はブラウザが ~30 秒の無活動を検知すると強制終了する。
+
+```
+Option+V（押下）→ SW が TOGGLE_VOICE を転送 → SW の活動が終了
+  ↓（SW の idle タイマー開始）
+ユーザーが話す（5〜15 秒）
+  ↓（SW の idle タイマーが ~30 秒で切れる）
+音声認識結果 → GET_VALID_TOKEN 送信 → SW が終了済み
+  → "The message channel closed before a response was received"
+```
+
+一覧ナビゲーション（「取引先一覧を表示して」）は SW を呼ばないため影響を受けない。
+検索のみが影響を受けた。
+
+**修正**: content.js でリスニング開始時に 10 秒ごとに `STAY_ALIVE` を送信して SW を起こし続ける。
+
+```javascript
+// content.js
+const startKeepalive = function() {
+  if (keepaliveTimer) return;
+  keepaliveTimer = setInterval(() => {
+    chrome.runtime.sendMessage({ type: 'STAY_ALIVE' }).catch(() => {});
+  }, 10000); // Chrome の idle タイマー（~30秒）より十分短い
+};
+```
+
+```javascript
+// background.js
+case 'STAY_ALIVE':
+  sendResponse({ success: true });
+  return false;
+```
+
+### 根本原因 D: background.js で sendResponse 後の chrome.runtime.lastError が未確認
+
+非同期 `sendResponse` 呼び出し後、送信先（content script）がすでにいない場合、
+Chrome が `chrome.runtime.lastError` をセットするが未確認だったため
+"Unchecked runtime.lastError" 警告が発生していた。
+
+**修正**: 全非同期 sendResponse 後に `void chrome.runtime.lastError` を追加。
+
+---
+
+## 4. 再発防止策（実装済み）
+
+| 対策 | 実装内容 |
+|------|---------|
+| REQUIRED_PROVIDERS 更新 | salesforceApi.js, recordResolver.js, candidateList.js を追加 |
+| SW keepalive テスト追加 | テスト3-search-9 で setInterval + STAY_ALIVE の動作を検証 |
+| SOSL フローテスト追加 | テスト3-search-6/7/8 で 0件/1件/複数件の分岐を検証 |
+| STAY_ALIVE ユニットテスト追加 | background.test.js で同期応答を検証 |
+
+---
+
+## 5. 学んだこと（Lessons Learned）
+
+1. **content.js に新しいグローバル依存を追加したら REQUIRED_PROVIDERS も必ず更新する**: インシデント #2 と全く同一のパターン。自動テストの網がグローバル関数ではなくファイル単位で止まっていた。
+
+2. **MV3 の SW は音声認識中に終了しうる**: 発話待機（listening 状態）は「無活動」とみなされる。keepalive は音声認識のある全 MV3 拡張機能で必要。
+
+3. **「一覧ナビが動く = OAuth 接続が生きている」は誤り**: 一覧ナビは SW を使わないため、SW が死んでいても動く。SW の生存確認には検索（GET_VALID_TOKEN）が必要。
+
+4. **Unchecked lastError は無音のデバッグ妨害**: Chrome が "Unchecked" と記録するだけで例外は投げない。定期的にコンソールを確認し、`void chrome.runtime.lastError` パターンを全非同期 sendResponse に適用する。
+
+---
+
+## 6. 関連 PR
+
+| PR | 内容 |
+|----|------|
+| #62〜#65 | 検索方式の試行錯誤（SOSL API / shadow DOM / execCommand / URL遷移） |
+| #66 | fix(search): デバッグログ・トークンエラーフォールバック・「を検索して」パターン追加 |
+| #67 | fix(search): manifest に salesforceApi.js 等を追加・SW keepalive 実装 |

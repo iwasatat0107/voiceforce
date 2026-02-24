@@ -88,7 +88,10 @@ describe('manifest.json', () => {
       'lib/ruleEngine.js':         'match()',
       'lib/navigator.js':          'navigateTo() / buildListUrl() / buildRecordUrl() / buildSearchUrl() / goBack()',
       'lib/speechRecognition.js':  'createSpeechRecognition()',
+      'lib/salesforceApi.js':      'sosl()',
+      'lib/recordResolver.js':     'resolve()',
       'ui/widget.js':              'createWidget()',
+      'ui/candidateList.js':       'createCandidateList()',
     };
 
     test.each(Object.entries(REQUIRED_PROVIDERS))(

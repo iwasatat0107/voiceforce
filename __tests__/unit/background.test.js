@@ -160,6 +160,36 @@ describe('background.js', () => {
   });
 
   // ──────────────────────────────────────────
+  // STAY_ALIVE（SW キープアライブ）
+  // ──────────────────────────────────────────
+  describe('handleMessage — STAY_ALIVE', () => {
+    test('STAY_ALIVE → success:true を同期で返す（非同期応答なし）', () => {
+      const sender = { id: chrome.runtime.id };
+      const message = { type: 'STAY_ALIVE' };
+      const sendResponse = jest.fn();
+
+      const result = background.handleMessage(message, sender, sendResponse);
+
+      expect(result).toBe(false); // 同期レスポンス
+      expect(sendResponse).toHaveBeenCalledWith({ success: true });
+    });
+
+    test('STAY_ALIVE — 不正 sender は拒否される', () => {
+      const sender = { id: 'malicious-extension-id' };
+      const message = { type: 'STAY_ALIVE' };
+      const sendResponse = jest.fn();
+
+      const result = background.handleMessage(message, sender, sendResponse);
+
+      expect(result).toBe(false);
+      expect(sendResponse).toHaveBeenCalledWith({
+        success: false,
+        error: 'unauthorized sender',
+      });
+    });
+  });
+
+  // ──────────────────────────────────────────
   // 未知のメッセージタイプ
   // ──────────────────────────────────────────
   describe('handleMessage — unknown message type', () => {

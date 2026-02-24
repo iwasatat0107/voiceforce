@@ -8,6 +8,24 @@ const isSalesforceUrl = /\.(salesforce|force|lightning\.force)\.com/.test(window
 if (isSalesforceUrl) {
   let widget = null;
   let speech = null;
+  let keepaliveTimer = null;
+
+  // SW キープアライブ: MV3 Service Worker は ~30秒の無活動でシャットダウンする。
+  // 音声認識中（5〜15秒）に SW が終了すると GET_VALID_TOKEN が失敗するため、
+  // リスニング中は 10秒ごとに STAY_ALIVE を送って SW を生かし続ける。
+  const startKeepalive = function() {
+    if (keepaliveTimer) return;
+    keepaliveTimer = setInterval(() => {
+      chrome.runtime.sendMessage({ type: 'STAY_ALIVE' }).catch(() => {});
+    }, 10000);
+  };
+
+  const stopKeepalive = function() {
+    if (keepaliveTimer) {
+      clearInterval(keepaliveTimer);
+      keepaliveTimer = null;
+    }
+  };
 
   const getWidget = function() {
     if (!widget && typeof createWidget === 'function') { // eslint-disable-line no-undef
@@ -29,15 +47,18 @@ if (isSalesforceUrl) {
     }
 
     w.setState('listening');
+    startKeepalive(); // SW をリスニング中ずっと生かす
 
     speech = createSpeechRecognition({ // eslint-disable-line no-undef
       onResult: (transcript) => {
+        stopKeepalive(); // 結果が来たら keepalive 不要
         w.setTranscript(transcript);
         w.setState('processing');
         if (speech) speech.stop();
 
         // ruleEngine で解析
         const intent = match(transcript); // eslint-disable-line no-undef
+        console.warn('[VF] transcript:', transcript, '| intent:', JSON.stringify(intent));
         if (intent && intent.action === 'navigate' && intent.target === 'list') {
           chrome.storage.local.get(['instance_url', 'access_token_enc', 'enc_iv'], async (result) => {
             const instanceUrl = result.instance_url || window.location.origin;
@@ -59,20 +80,71 @@ if (isSalesforceUrl) {
 
         } else if (intent && intent.action === 'search') {
           const keyword = intent.keyword;
-          w.setState('success', { message: `「${keyword}」を検索します` });
-          setTimeout(() => {
-            chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword });
-          }, 800);
+          const sfObject = intent.object || 'Account';
+          w.setState('processing', { message: `「${keyword}」を検索中...` });
+
+          chrome.storage.local.get(['instance_url'], async (storageResult) => {
+            const instanceUrl = storageResult.instance_url || window.location.origin;
+            try {
+              // アクセストークン取得
+              const token = await new Promise((tokenRes, tokenRej) => {
+                chrome.runtime.sendMessage({ type: 'GET_VALID_TOKEN' }, (r) => {
+                  if (chrome.runtime.lastError) {
+                    tokenRej(new Error(chrome.runtime.lastError.message));
+                    return;
+                  }
+                  if (r && r.success) { tokenRes(r.token); return; }
+                  tokenRej(new Error(r?.error || 'トークン取得に失敗しました'));
+                });
+              });
+
+              // SOSL 検索
+              const records = await sosl(instanceUrl, token, keyword, sfObject); // eslint-disable-line no-undef
+              const resolved = resolve(records); // eslint-disable-line no-undef
+
+              if (resolved.category === 'not_found') {
+                w.setState('success', { message: resolved.message });
+              } else if (resolved.category === 'single') {
+                const url = buildRecordUrl(instanceUrl, sfObject, resolved.record.Id); // eslint-disable-line no-undef
+                w.setState('success', { message: `「${resolved.record.Name}」を開きます` });
+                setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
+              } else {
+                // multiple / too_many → 検索ページへ遷移
+                w.setState('success', { message: resolved.message });
+                setTimeout(() => {
+                  chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword }).catch(() => {});
+                }, 1000);
+              }
+            } catch (err) {
+              console.warn('[VF] search error:', err.message);
+              // トークンエラー（未接続・期限切れ）はフォールバック遷移
+              const isTokenErr = !err.message || err.message.includes('トークン') ||
+                err.message.includes('token') || err.message.includes('Receiving end') ||
+                err.message.includes('message channel') || err.message.includes('closed') ||
+                err.message.includes('unauthorized') || err.message.includes('INVALID_SESSION');
+              if (isTokenErr) {
+                w.setState('success', { message: `「${keyword}」を検索します（再接続を推奨）` });
+                setTimeout(() => {
+                  chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword }).catch(() => {});
+                }, 800);
+              } else {
+                w.setState('error', { message: err.message || '検索中にエラーが発生しました' });
+                setTimeout(() => w.setState('idle'), 3000);
+              }
+            }
+          });
 
         } else {
           w.setState('success', { message: `認識: ${transcript}` });
         }
       },
       onError: (err) => {
+        stopKeepalive();
         w.setState('error', { message: err });
         setTimeout(() => w.setState('idle'), 3000);
       },
       onEnd: () => {
+        stopKeepalive();
         if (w.getState() === 'listening') {
           w.setState('idle');
         }
