@@ -64,6 +64,11 @@ function handleMessage(message, sender, sendResponse) {
       return false;
     }
 
+    case 'STAY_ALIVE':
+      // SW キープアライブ用。受信するだけで SW が生き続ける。
+      sendResponse({ success: true });
+      return false;
+
     default:
       sendResponse({ success: false, error: 'unknown message type' });
       return false;

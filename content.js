@@ -8,6 +8,24 @@ const isSalesforceUrl = /\.(salesforce|force|lightning\.force)\.com/.test(window
 if (isSalesforceUrl) {
   let widget = null;
   let speech = null;
+  let keepaliveTimer = null;
+
+  // SW キープアライブ: MV3 Service Worker は ~30秒の無活動でシャットダウンする。
+  // 音声認識中（5〜15秒）に SW が終了すると GET_VALID_TOKEN が失敗するため、
+  // リスニング中は 10秒ごとに STAY_ALIVE を送って SW を生かし続ける。
+  const startKeepalive = function() {
+    if (keepaliveTimer) return;
+    keepaliveTimer = setInterval(() => {
+      chrome.runtime.sendMessage({ type: 'STAY_ALIVE' }).catch(() => {});
+    }, 10000);
+  };
+
+  const stopKeepalive = function() {
+    if (keepaliveTimer) {
+      clearInterval(keepaliveTimer);
+      keepaliveTimer = null;
+    }
+  };
 
   const getWidget = function() {
     if (!widget && typeof createWidget === 'function') { // eslint-disable-line no-undef
@@ -29,9 +47,11 @@ if (isSalesforceUrl) {
     }
 
     w.setState('listening');
+    startKeepalive(); // SW をリスニング中ずっと生かす
 
     speech = createSpeechRecognition({ // eslint-disable-line no-undef
       onResult: (transcript) => {
+        stopKeepalive(); // 結果が来たら keepalive 不要
         w.setTranscript(transcript);
         w.setState('processing');
         if (speech) speech.stop();
@@ -119,10 +139,12 @@ if (isSalesforceUrl) {
         }
       },
       onError: (err) => {
+        stopKeepalive();
         w.setState('error', { message: err });
         setTimeout(() => w.setState('idle'), 3000);
       },
       onEnd: () => {
+        stopKeepalive();
         if (w.getState() === 'listening') {
           w.setState('idle');
         }
