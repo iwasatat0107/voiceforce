@@ -44,6 +44,18 @@ function handleMessage(message, sender, sendResponse) {
         .catch((err) => sendResponse({ success: false, error: err.message }));
       return true;
 
+    case 'NAVIGATE_TO_SEARCH': {
+      const { keyword } = message;
+      if (!keyword || typeof keyword !== 'string') {
+        sendResponse({ success: false, error: 'invalid keyword' });
+        return false;
+      }
+      const tabOrigin = new URL(sender.tab.url).origin;
+      const searchUrl = `${tabOrigin}/lightning/search?searchInput=${encodeURIComponent(keyword)}`;
+      chrome.tabs.update(sender.tab.id, { url: searchUrl });
+      return false;
+    }
+
     default:
       sendResponse({ success: false, error: 'unknown message type' });
       return false;
