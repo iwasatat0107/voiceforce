@@ -86,12 +86,9 @@ describe('manifest.json', () => {
     // その提供元ファイルの対応表。新しいグローバル依存を追加したら必ずここも更新する。
     const REQUIRED_PROVIDERS = {
       'lib/ruleEngine.js':         'match()',
-      'lib/navigator.js':          'navigateTo() / buildListUrl() / buildRecordUrl() / goBack()',
+      'lib/navigator.js':          'navigateTo() / buildListUrl() / buildRecordUrl() / buildSearchUrl() / goBack()',
       'lib/speechRecognition.js':  'createSpeechRecognition()',
-      'lib/salesforceApi.js':      'sosl()',
-      'lib/recordResolver.js':     'resolve()',
       'ui/widget.js':              'createWidget()',
-      'ui/candidateList.js':       'createCandidateList()',
     };
 
     test.each(Object.entries(REQUIRED_PROVIDERS))(

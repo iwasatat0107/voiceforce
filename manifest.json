@@ -28,10 +28,7 @@
         "lib/ruleEngine.js",
         "lib/navigator.js",
         "lib/speechRecognition.js",
-        "lib/salesforceApi.js",
-        "lib/recordResolver.js",
         "ui/widget.js",
-        "ui/candidateList.js",
         "content.js"
       ],
       "css": ["content.css"]
