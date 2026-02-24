@@ -1,4 +1,5 @@
 module.exports = {
+  ignorePatterns: ['dist/'],
   env: {
     browser: true,
     es2021: true,
@@ -42,7 +43,7 @@ module.exports = {
   overrides: [
     {
       // Node.js ファイル（設定ファイル・スクリプト）
-      files: ['.eslintrc.js', 'jest.config.js', 'scripts/**/*.js', 'worker/**/*.js'],
+      files: ['.eslintrc.js', 'jest.config.js', 'playwright.config.js', 'scripts/**/*.js', 'worker/**/*.js'],
       env: {
         browser: false,
         node: true,
