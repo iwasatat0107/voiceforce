@@ -61,35 +61,8 @@ if (isSalesforceUrl) {
           const keyword = intent.keyword;
           w.setState('success', { message: `「${keyword}」を検索します` });
           setTimeout(() => {
-            // Salesforce グローバル検索バーにキーワードを入力して Enter を送信
-            const SEARCH_SELECTORS = [
-              '.slds-global-header__search input',
-              'input[type="search"]',
-              'input[aria-label*="Search"]',
-              'input[aria-label*="検索"]',
-            ];
-            let input = null;
-            for (const sel of SEARCH_SELECTORS) {
-              input = document.querySelector(sel);
-              if (input) break;
-            }
-            if (input) {
-              input.focus();
-              const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-              setter.call(input, keyword);
-              input.dispatchEvent(new Event('input', { bubbles: true }));
-              input.dispatchEvent(new KeyboardEvent('keydown',  { key: 'Enter', keyCode: 13, bubbles: true }));
-              input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', keyCode: 13, charCode: 13, bubbles: true }));
-              input.dispatchEvent(new KeyboardEvent('keyup',    { key: 'Enter', keyCode: 13, bubbles: true }));
-            } else {
-              // 検索バーが見つからない場合は URL フォールバック
-              chrome.storage.local.get(['instance_url'], (storageResult) => {
-                const instanceUrl = storageResult.instance_url || window.location.origin;
-                const url = buildSearchUrl(instanceUrl, keyword); // eslint-disable-line no-undef
-                navigateTo(url); // eslint-disable-line no-undef
-              });
-            }
-          }, 500);
+            chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword });
+          }, 800);
 
         } else {
           w.setState('success', { message: `認識: ${transcript}` });

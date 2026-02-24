@@ -125,6 +125,41 @@ describe('background.js', () => {
   });
 
   // ──────────────────────────────────────────
+  // NAVIGATE_TO_SEARCH
+  // ──────────────────────────────────────────
+  describe('handleMessage — NAVIGATE_TO_SEARCH', () => {
+    test('有効な keyword → chrome.tabs.update が正しい Salesforce 検索 URL で呼ばれる', () => {
+      const sender = {
+        id: chrome.runtime.id,
+        tab: { id: 42, url: 'https://myorg.my.salesforce.com/lightning/o/Opportunity/list' },
+      };
+      const message = { type: 'NAVIGATE_TO_SEARCH', keyword: 'ABC株式会社' };
+      const sendResponse = jest.fn();
+
+      const result = background.handleMessage(message, sender, sendResponse);
+      expect(result).toBe(false);
+      expect(chrome.tabs.update).toHaveBeenCalledWith(
+        42,
+        { url: 'https://myorg.my.salesforce.com/lightning/search?searchInput=ABC%E6%A0%AA%E5%BC%8F%E4%BC%9A%E7%A4%BE' }
+      );
+    });
+
+    test('keyword が空文字 → エラーレスポンスを返す', () => {
+      const sender = {
+        id: chrome.runtime.id,
+        tab: { id: 42, url: 'https://myorg.my.salesforce.com/lightning/page/home' },
+      };
+      const message = { type: 'NAVIGATE_TO_SEARCH', keyword: '' };
+      const sendResponse = jest.fn();
+
+      const result = background.handleMessage(message, sender, sendResponse);
+      expect(result).toBe(false);
+      expect(sendResponse).toHaveBeenCalledWith({ success: false, error: 'invalid keyword' });
+      expect(chrome.tabs.update).not.toHaveBeenCalled();
+    });
+  });
+
+  // ──────────────────────────────────────────
   // 未知のメッセージタイプ
   // ──────────────────────────────────────────
   describe('handleMessage — unknown message type', () => {

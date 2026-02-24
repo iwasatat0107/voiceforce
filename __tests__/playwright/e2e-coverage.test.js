@@ -1129,142 +1129,103 @@ test('テスト3-search-2: 「ABC株式会社を表示して」→ buildSearchUr
   await page.close();
 });
 
-// ── テスト3-search-3: DOM 入力方式 — 検索バーにキーワードが入力され Enter が送信される ──
+// ── テスト3-search-3: NAVIGATE_TO_SEARCH — sendMessage が正しいメッセージを送信する ──
 //
-// content.js の search ハンドラが行う処理を直接検証:
-//   1. .slds-global-header__search input を querySelector で取得
-//   2. nativeInputSetter でキーワードをセット（LWC リアクティブ対応）
-//   3. input / keydown(Enter) / keypress(Enter) / keyup(Enter) イベントを dispatch
+// content.js の search ハンドラは chrome.runtime.sendMessage を呼ぶ。
+// background.js の NAVIGATE_TO_SEARCH case が chrome.tabs.update を呼ぶことは
+// Jest ユニットテスト（background.test.js）で検証済み。
+// ここでは ruleEngine が keyword を正しく抽出し sendMessage が呼ばれることを検証する。
 
-test('テスト3-search-3: DOM 入力方式 — 「ABC株式会社」が検索バーにセットされ Enter が送信される', async () => {
+test('テスト3-search-3: 「ABC株式会社を表示して」→ NAVIGATE_TO_SEARCH メッセージが送信される', async () => {
   const page = await setupPage();
-
-  // Salesforce グローバルヘッダーと同等のモック DOM を追加
-  await page.evaluate(() => {
-    const container = document.createElement('div');
-    container.className = 'slds-global-header__search';
-    const input = document.createElement('input');
-    input.type = 'search';
-    container.appendChild(input);
-    document.body.appendChild(container);
-  });
 
   const result = await page.evaluate(async () => {
     return new Promise((resolve) => {
-      const input = document.querySelector('.slds-global-header__search input');
-      const events = [];
+      // sendMessage をスパイ化
+      const originalSend = chrome.runtime.sendMessage.bind(chrome.runtime);
+      chrome.runtime.sendMessage = (msg) => {
+        if (msg && msg.type === 'NAVIGATE_TO_SEARCH') {
+          resolve({ type: msg.type, keyword: msg.keyword });
+        }
+        return originalSend(msg);
+      };
 
-      input.addEventListener('input',    ()  => events.push('input'));
-      input.addEventListener('keydown',  (e) => { if (e.key === 'Enter') events.push('keydown'); });
-      input.addEventListener('keypress', (e) => { if (e.key === 'Enter') events.push('keypress'); });
-      input.addEventListener('keyup',    (e) => { if (e.key === 'Enter') events.push('keyup'); });
-
-      // content.js の search ハンドラと同一ロジック
-      const keyword = 'ABC株式会社';
-      input.focus();
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-      setter.call(input, keyword);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent('keydown',  { key: 'Enter', keyCode: 13, bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', keyCode: 13, charCode: 13, bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent('keyup',    { key: 'Enter', keyCode: 13, bubbles: true }));
-
-      resolve({ value: input.value, events });
-    });
-  });
-
-  // キーワードが入力されている
-  expect(result.value).toBe('ABC株式会社');
-  // 全イベントが発火している
-  expect(result.events).toContain('input');
-  expect(result.events).toContain('keydown');
-  expect(result.events).toContain('keypress');
-  expect(result.events).toContain('keyup');
-
-  await page.close();
-});
-
-test('テスト3-search-4: DOM 入力方式 — ruleEngine で keyword 抽出 → 検索バーへの一連フロー', async () => {
-  const page = await setupPage();
-
-  // Salesforce グローバルヘッダーのモック DOM を追加
-  await page.evaluate(() => {
-    const container = document.createElement('div');
-    container.className = 'slds-global-header__search';
-    const input = document.createElement('input');
-    input.type = 'search';
-    container.appendChild(input);
-    document.body.appendChild(container);
-  });
-
-  const result = await page.evaluate(async () => {
-    return new Promise((resolve) => {
-      const input = document.querySelector('.slds-global-header__search input');
-      let enterFired = false;
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') enterFired = true; });
-
-      // 音声テキストを ruleEngine に通して intent を取得
       const intent = window.match('ABC株式会社を表示して'); // eslint-disable-line no-undef
       if (!intent || intent.action !== 'search') {
-        resolve({ error: 'intent mismatch', intent });
+        resolve({ error: 'intent mismatch' });
         return;
       }
-
-      // content.js search ハンドラと同一ロジックで DOM 操作
-      const keyword = intent.keyword;
-      input.focus();
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-      setter.call(input, keyword);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent('keydown',  { key: 'Enter', keyCode: 13, bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', keyCode: 13, charCode: 13, bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent('keyup',    { key: 'Enter', keyCode: 13, bubbles: true }));
-
-      resolve({ keyword, inputValue: input.value, enterFired });
+      chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword: intent.keyword });
+      setTimeout(() => resolve({ error: 'timeout' }), 2000);
     });
   });
 
-  // ruleEngine が「ABC株式会社」を keyword として抽出できている
+  expect(result.type).toBe('NAVIGATE_TO_SEARCH');
   expect(result.keyword).toBe('ABC株式会社');
-  // 検索バーに keyword がセットされている
-  expect(result.inputValue).toBe('ABC株式会社');
-  // Enter キーイベントが発火している
-  expect(result.enterFired).toBe(true);
-
   await page.close();
 });
 
-test('テスト3-search-5: DOM 入力方式 — 検索バーが存在しない場合は URL フォールバックで navigateTo', async () => {
-  // 検索バーが存在しないページでは buildSearchUrl + navigateTo へフォールバック
+test('テスト3-search-4: 「田中商事の商談を開いて」→ NAVIGATE_TO_SEARCH メッセージが送信される', async () => {
   const page = await setupPage();
-  const instanceUrl = 'https://myorg.my.salesforce.com';
 
-  const result = await page.evaluate(
-    async ({ instanceUrl }) => {
-      return new Promise((okResult) => {
-        window.navigateTo = (url) => okResult({ navigatedTo: url });
-
-        const intent = window.match('田中商事を表示して'); // eslint-disable-line no-undef
-        if (!intent || intent.action !== 'search') {
-          okResult({ navigatedTo: null, error: 'intent mismatch' });
-          return;
+  const result = await page.evaluate(async () => {
+    return new Promise((resolve) => {
+      const originalSend = chrome.runtime.sendMessage.bind(chrome.runtime);
+      chrome.runtime.sendMessage = (msg) => {
+        if (msg && msg.type === 'NAVIGATE_TO_SEARCH') {
+          resolve({ type: msg.type, keyword: msg.keyword });
         }
+        return originalSend(msg);
+      };
 
-        // 検索バーなし → フォールバックロジック
-        const input = document.querySelector('.slds-global-header__search input');
-        if (!input) {
-          const url = buildSearchUrl(instanceUrl, intent.keyword); // eslint-disable-line no-undef
-          window.navigateTo(url);
+      const intent = window.match('田中商事の商談を開いて'); // eslint-disable-line no-undef
+      if (!intent || intent.action !== 'search') {
+        resolve({ error: 'intent mismatch' });
+        return;
+      }
+      chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword: intent.keyword });
+      setTimeout(() => resolve({ error: 'timeout' }), 2000);
+    });
+  });
+
+  expect(result.type).toBe('NAVIGATE_TO_SEARCH');
+  expect(result.keyword).toBe('田中商事');
+  await page.close();
+});
+
+test('テスト3-search-5: search intent → ウィジェットが success 状態になり sendMessage が呼ばれる', async () => {
+  const page = await setupPage();
+
+  const result = await page.evaluate(async () => {
+    return new Promise((resolve) => {
+      const w = createWidget(); // eslint-disable-line no-undef
+      w.setState('listening');
+
+      const originalSend = chrome.runtime.sendMessage.bind(chrome.runtime);
+      chrome.runtime.sendMessage = (msg) => {
+        if (msg && msg.type === 'NAVIGATE_TO_SEARCH') {
+          resolve({ widgetState: w.getState(), keyword: msg.keyword });
         }
-        setTimeout(() => okResult({ navigatedTo: null, error: 'timeout' }), 1000);
+        return originalSend(msg);
+      };
+
+      const sr = createSpeechRecognition({ // eslint-disable-line no-undef
+        onResult: (transcript) => {
+          const intent = window.match(transcript); // eslint-disable-line no-undef
+          if (intent && intent.action === 'search') {
+            w.setState('success', { message: `「${intent.keyword}」を検索します` });
+            chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword: intent.keyword });
+          }
+        },
       });
-    },
-    { instanceUrl }
-  );
+      sr.start();
+      window.__triggerSpeech('ABC株式会社を表示して');
+      setTimeout(() => resolve({ error: 'timeout' }), 2000);
+    });
+  });
 
-  expect(result.navigatedTo).toContain('/lightning/search?searchInput=');
-  // URL エンコードされているため decodeURIComponent でデコードして検証
-  expect(decodeURIComponent(result.navigatedTo)).toContain('田中商事');
+  expect(result.widgetState).toBe('success');
+  expect(result.keyword).toBe('ABC株式会社');
   await page.close();
 });
 
