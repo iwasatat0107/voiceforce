@@ -138,6 +138,8 @@ describe('background.js', () => {
 
       const result = background.handleMessage(message, sender, sendResponse);
       expect(result).toBe(false);
+      // タブ遷移前に sendResponse が呼ばれること（message channel closed エラー防止）
+      expect(sendResponse).toHaveBeenCalledWith({ success: true });
       expect(chrome.tabs.update).toHaveBeenCalledWith(
         42,
         { url: 'https://myorg.my.salesforce.com/lightning/search?searchInput=ABC%E6%A0%AA%E5%BC%8F%E4%BC%9A%E7%A4%BE' }

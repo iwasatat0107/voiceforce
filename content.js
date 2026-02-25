@@ -12,9 +12,13 @@ if (isSalesforceUrl) {
 
   // SW キープアライブ: MV3 Service Worker は ~30秒の無活動でシャットダウンする。
   // 音声認識中（5〜15秒）に SW が終了すると GET_VALID_TOKEN が失敗するため、
-  // リスニング中は 10秒ごとに STAY_ALIVE を送って SW を生かし続ける。
+  // リスニング開始時に即時1回 + 以降10秒ごとに STAY_ALIVE を送って SW を生かし続ける。
+  // ※ setInterval の初回発火は10秒後なので、短い発話（3〜8秒）では interval が
+  //   一度も発火しない。即時送信で SW が確実に生きた状態でトークン取得を行う。
   const startKeepalive = function() {
     if (keepaliveTimer) return;
+    // 即時1回送信: SW が停止していても確実に起動させる
+    chrome.runtime.sendMessage({ type: 'STAY_ALIVE' }).catch(() => {});
     keepaliveTimer = setInterval(() => {
       chrome.runtime.sendMessage({ type: 'STAY_ALIVE' }).catch(() => {});
     }, 10000);
