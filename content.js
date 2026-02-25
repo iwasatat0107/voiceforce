@@ -190,31 +190,51 @@ if (isSalesforceUrl) {
   };
 
   // グローバル検索ページ着地時にキーワードを検索ボックスへ自動入力する。
-  // chrome.tabs.update での searchInput URL パラメータは Lightning SPA に無視されるため、
-  // storage 経由でキーワードを受け取り、DOM に直接書き込んで検索を起動する。
+  // Salesforce LWC は open Shadow DOM を使用するため shadowRoot を再帰的に辿って input を探す。
+  // chrome.tabs.update での searchInput URL パラメータは Lightning SPA に無視されるため
+  // storage 経由でキーワードを渡し、Shadow DOM を貫通して input に書き込む。
   if (window.location.pathname === '/lightning/search') {
     chrome.storage.local.get(['pendingSearch'], ({ pendingSearch }) => {
       if (!pendingSearch) return;
       chrome.storage.local.remove('pendingSearch');
+      console.warn('[VF] /lightning/search 着地、pendingSearch:', pendingSearch);
+
+      // open Shadow DOM を含めて再帰的に selector に一致する要素を探す
+      const queryShadow = function(sel, root, depth) {
+        if (depth > 7) return null;
+        const el = root.querySelector(sel);
+        if (el) return el;
+        for (const node of root.querySelectorAll('*')) {
+          if (node.shadowRoot) {
+            const found = queryShadow(sel, node.shadowRoot, depth + 1);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
 
       const fillSearchInput = function(keyword, attempts) {
-        if (attempts <= 0) return;
-        // Salesforce Lightning の検索ボックス（複数セレクタのフォールバック）
-        const input = document.querySelector('input[type="search"]')
-          || document.querySelector('[role="searchbox"] input')
-          || document.querySelector('input[placeholder*="検索"]');
+        if (attempts <= 0) {
+          console.warn('[VF] 検索ボックスが見つかりませんでした（Shadow DOM 全探索後）');
+          return;
+        }
+        // input[type="search"] が見つからなければ placeholder で絞り込む
+        const input = queryShadow('input[type="search"]', document, 0)
+          || queryShadow('input[placeholder*="検索"]', document, 0);
         if (input) {
-          // LWC/Aura のリアクティブ更新にはネイティブセッターが必要
-          const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-          nativeSetter.call(input, keyword);
+          console.warn('[VF] 検索ボックス発見 →', input.tagName, input.placeholder);
+          // LWC のリアクティブ更新にはネイティブ value セッターが必要
+          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+          setter.call(input, keyword);
           input.dispatchEvent(new Event('input', { bubbles: true }));
-          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-          input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+          input.focus();
         } else {
+          console.warn('[VF] 検索ボックス未発見、再試行... 残り', attempts - 1);
           setTimeout(() => fillSearchInput(keyword, attempts - 1), 500);
         }
       };
-      // Salesforce ページの初期レンダリングを待ってから実行
+
+      // Salesforce の初期レンダリング（約 1.5 秒）を待ってから実行
       setTimeout(() => fillSearchInput(pendingSearch, 10), 1500);
     });
   }
