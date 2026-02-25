@@ -223,10 +223,12 @@ if (isSalesforceUrl) {
           || queryShadow('input[placeholder*="検索"]', document, 0);
         if (input) {
           console.warn('[VF] 検索ボックス発見 →', input.tagName, input.placeholder);
-          // LWC のリアクティブ更新にはネイティブ value セッターが必要
+          // value をセットして focus するだけ（input イベントは dispatch しない）。
+          // input イベントを dispatch すると Salesforce の自動検索が走りスピナーが止まらなくなる。
+          // ユーザーが1文字入力した時点で LWC が event.target.value（= キーワード + 入力文字）を読み取るため
+          // キーワードはそのまま残って検索に使われる。
           const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
           setter.call(input, keyword);
-          input.dispatchEvent(new Event('input', { bubbles: true }));
           input.focus();
         } else {
           console.warn('[VF] 検索ボックス未発見、再試行... 残り', attempts - 1);
