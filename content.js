@@ -75,7 +75,11 @@ if (isSalesforceUrl) {
         if (resolved.category === 'not_found') {
           w.setState('success', { message: `「${keyword}」は見つかりません。グローバル検索に移動します` });
           setTimeout(() => {
-            chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword }).catch(() => {});
+            // chrome.tabs.update では searchInput URL パラメータが Lightning SPA に無視されるため
+            // storage にキーワードを保存し、着地先の content.js が検索ボックスへ直接入力する
+            chrome.storage.local.set({ pendingSearch: keyword }, () => {
+              chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword }).catch(() => {});
+            });
           }, 2000);
           return;
         }
@@ -87,10 +91,12 @@ if (isSalesforceUrl) {
           w.setState('success', { message: `「${displayName}」を開きます` });
           setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
         } else {
-          // multiple / too_many → 検索ページへ遷移
+          // multiple / too_many → 検索ページへ遷移（キーワードを storage 経由で渡す）
           w.setState('success', { message: resolved.message });
           setTimeout(() => {
-            chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword }).catch(() => {});
+            chrome.storage.local.set({ pendingSearch: keyword }, () => {
+              chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword }).catch(() => {});
+            });
           }, 1000);
         }
       } catch (err) {
@@ -182,6 +188,36 @@ if (isSalesforceUrl) {
 
     speech.start();
   };
+
+  // グローバル検索ページ着地時にキーワードを検索ボックスへ自動入力する。
+  // chrome.tabs.update での searchInput URL パラメータは Lightning SPA に無視されるため、
+  // storage 経由でキーワードを受け取り、DOM に直接書き込んで検索を起動する。
+  if (window.location.pathname === '/lightning/search') {
+    chrome.storage.local.get(['pendingSearch'], ({ pendingSearch }) => {
+      if (!pendingSearch) return;
+      chrome.storage.local.remove('pendingSearch');
+
+      const fillSearchInput = function(keyword, attempts) {
+        if (attempts <= 0) return;
+        // Salesforce Lightning の検索ボックス（複数セレクタのフォールバック）
+        const input = document.querySelector('input[type="search"]')
+          || document.querySelector('[role="searchbox"] input')
+          || document.querySelector('input[placeholder*="検索"]');
+        if (input) {
+          // LWC/Aura のリアクティブ更新にはネイティブセッターが必要
+          const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+          nativeSetter.call(input, keyword);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+          input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+        } else {
+          setTimeout(() => fillSearchInput(keyword, attempts - 1), 500);
+        }
+      };
+      // Salesforce ページの初期レンダリングを待ってから実行
+      setTimeout(() => fillSearchInput(pendingSearch, 10), 1500);
+    });
+  }
 
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'TOGGLE_VOICE') {
