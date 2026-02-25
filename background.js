@@ -54,6 +54,8 @@ function handleMessage(message, sender, sendResponse) {
         sendResponse({ success: false, error: 'no tab' });
         return false;
       }
+      // タブ遷移前にレスポンスを送信（遷移後に message channel が閉じても lastError にならない）
+      sendResponse({ success: true });
       try {
         const tabOrigin = new URL(sender.tab.url).origin;
         const searchUrl = `${tabOrigin}/lightning/search?searchInput=${encodeURIComponent(keyword)}`;

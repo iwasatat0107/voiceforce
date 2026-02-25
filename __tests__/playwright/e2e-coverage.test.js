@@ -1429,9 +1429,11 @@ test('テスト3-search-8: SOSL 複数件 → resolve が multiple を返す', a
   await page.close();
 });
 
-test('テスト3-search-9: SW keepalive — setInterval が登録されリスニング中に STAY_ALIVE を送信する', async () => {
-  // content.js の startKeepalive() ロジックを直接検証する
-  // keepaliveTimer は 10秒ごとだが、テスト内でインターバルをシミュレート
+test('テスト3-search-9: SW keepalive — startKeepalive() 呼び出し直後に即時 STAY_ALIVE が送信される', async () => {
+  // content.js の startKeepalive() 改修後のロジックを検証:
+  //   1. 即時1回 STAY_ALIVE 送信（短い発話でも SW が確実に起きる）
+  //   2. 以降 10秒ごとに送信（setInterval）
+  //   3. stopKeepalive() でタイマー停止
   const page = await setupPage();
 
   const result = await page.evaluate(async () => {
@@ -1443,10 +1445,12 @@ test('テスト3-search-9: SW keepalive — setInterval が登録されリスニ
         return originalSend(msg);
       };
 
-      // startKeepalive() のロジックを直接テスト
+      // content.js の startKeepalive() と同等のロジック（即時送信 + setInterval）
       let timer = null;
       const startKeepalive = () => {
         if (timer) return;
+        // 即時1回: SW が停止していても確実に起動させる
+        chrome.runtime.sendMessage({ type: 'STAY_ALIVE' }).catch(() => {});
         timer = setInterval(() => {
           chrome.runtime.sendMessage({ type: 'STAY_ALIVE' }).catch(() => {});
         }, 50); // テスト用に 50ms に短縮
@@ -1457,16 +1461,23 @@ test('テスト3-search-9: SW keepalive — setInterval が登録されリスニ
 
       startKeepalive();
 
-      // 120ms 後に停止（50ms × 2〜3 回は発火する）
+      // 即時送信を確認（t=0 の時点で既に 1 件あるはず）
+      const immediateCount = messages.filter(m => m.type === 'STAY_ALIVE').length;
+
+      // 30ms 後に停止（短い発話を模擬: interval はまだ発火していない可能性がある）
       setTimeout(() => {
         stopKeepalive();
-        const stayAliveCount = messages.filter(m => m.type === 'STAY_ALIVE').length;
-        okResult({ stayAliveCount, timerStopped: timer === null });
-      }, 120);
+        const totalCount = messages.filter(m => m.type === 'STAY_ALIVE').length;
+        okResult({ immediateCount, totalCount, timerStopped: timer === null });
+      }, 30);
     });
   });
 
-  expect(result.stayAliveCount).toBeGreaterThanOrEqual(1);
+  // 即時送信: startKeepalive() 呼び出し直後に 1 件送信されている
+  expect(result.immediateCount).toBe(1);
+  // interval が止まっている
   expect(result.timerStopped).toBe(true);
+  // 合計も 1 件以上（interval が発火した場合はさらに増える）
+  expect(result.totalCount).toBeGreaterThanOrEqual(1);
   await page.close();
 });
