@@ -88,7 +88,7 @@ describe('manifest.json', () => {
       'lib/ruleEngine.js':         'match()',
       'lib/navigator.js':          'navigateTo() / buildListUrl() / buildRecordUrl() / buildSearchUrl() / goBack()',
       'lib/speechRecognition.js':  'createSpeechRecognition()',
-      'lib/salesforceApi.js':      'sosl()',
+      'lib/salesforceApi.js':      'soslFuzzy()',
       'lib/recordResolver.js':     'resolve()',
       'ui/widget.js':              'createWidget()',
       'ui/candidateList.js':       'createCandidateList()',

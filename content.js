@@ -102,8 +102,8 @@ if (isSalesforceUrl) {
                 });
               });
 
-              // SOSL 検索
-              const records = await sosl(instanceUrl, token, keyword, sfObject); // eslint-disable-line no-undef
+              // SOSL 曖昧検索（法人格の漢字/ひらがな表記ゆれに対応）
+              const records = await soslFuzzy(instanceUrl, token, keyword, sfObject); // eslint-disable-line no-undef
               const resolved = resolve(records); // eslint-disable-line no-undef
 
               if (resolved.category === 'not_found') {
