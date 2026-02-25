@@ -121,16 +121,17 @@ if (isSalesforceUrl) {
               }
             } catch (err) {
               console.warn('[VF] search error:', err.message);
-              // トークンエラー（未接続・期限切れ）はフォールバック遷移
-              const isTokenErr = !err.message || err.message.includes('トークン') ||
-                err.message.includes('token') || err.message.includes('Receiving end') ||
-                err.message.includes('message channel') || err.message.includes('closed') ||
-                err.message.includes('unauthorized') || err.message.includes('INVALID_SESSION');
+              // トークンエラー（セッション切れ・未接続・期限切れ）はウィジェットで再接続を促す。
+              // ※ 検索ページへの遷移は行わない（SW 再起動後は session キーが消えており
+              //   トークン復号不能のため、遷移しても何も解決しない）
+              const isTokenErr = !err.message || err.message.includes('セッション') ||
+                err.message.includes('トークン') || err.message.includes('token') ||
+                err.message.includes('Receiving end') || err.message.includes('message channel') ||
+                err.message.includes('closed') || err.message.includes('unauthorized') ||
+                err.message.includes('INVALID_SESSION');
               if (isTokenErr) {
-                w.setState('success', { message: `「${keyword}」を検索します（再接続を推奨）` });
-                setTimeout(() => {
-                  chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword }).catch(() => {});
-                }, 800);
+                w.setState('error', { message: 'ポップアップから再接続してください' });
+                setTimeout(() => w.setState('idle'), 4000);
               } else {
                 w.setState('error', { message: err.message || '検索中にエラーが発生しました' });
                 setTimeout(() => w.setState('idle'), 3000);

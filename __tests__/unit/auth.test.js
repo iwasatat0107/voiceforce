@@ -387,9 +387,19 @@ describe('lib/auth.js', () => {
       expect(token).toBe('valid_access_token');
     });
 
-    test('トークンが未保存の場合はエラーをスローする', async () => {
+    test('SW 再起動でセッションキーが消えた場合はセッション切れエラーをスローする', async () => {
+      // session に key なし → SW 再起動後の状態をシミュレート
       chrome.storage.session.get.mockImplementation((keys, cb) => cb({}));
-      chrome.storage.session.set.mockImplementation((items, cb) => cb());
+
+      await expect(auth.getValidToken()).rejects.toThrow(
+        'セッションが切れました。ポップアップから再接続してください'
+      );
+    });
+
+    test('トークンが未保存の場合はエラーをスローする', async () => {
+      // session に key あり・local に token なし → 接続前の状態
+      const { exportedBase64 } = await _makeKeyWithExport();
+      chrome.storage.session.get.mockImplementation((keys, cb) => cb({ encryption_key: exportedBase64 }));
       chrome.storage.local.get.mockImplementationOnce((keys, cb) => cb({}));
 
       await expect(auth.getValidToken()).rejects.toThrow('Not authenticated');
