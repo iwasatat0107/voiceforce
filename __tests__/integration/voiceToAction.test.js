@@ -3,6 +3,8 @@
 const { match }                            = require('../../lib/ruleEngine');
 const { buildListUrl, buildRecordUrl, navigateTo, goBack } = require('../../lib/navigator');
 const { resolve, RESULT_CATEGORY }         = require('../../lib/recordResolver');
+const { createWidget, STATES }             = require('../../ui/widget');
+const { OBJECT_DISPLAY_FIELDS }            = require('../../lib/salesforceApi');
 
 const INSTANCE_URL = 'https://example.lightning.force.com';
 
@@ -124,6 +126,86 @@ describe('音声→アクション統合テスト', () => {
       expect(action).not.toBeNull();
       expect(action.action).toBe('select');
       expect(action.index).toBe(index);
+    });
+  });
+
+  // ── 0件ヒット → EDITING 遷移フロー ──────────────────────────────────────
+  describe('0件ヒット → EDITING 遷移フロー', () => {
+    let widget;
+
+    beforeEach(() => {
+      const existing = document.getElementById('vfa-widget');
+      if (existing) existing.remove();
+      widget = createWidget();
+    });
+
+    afterEach(() => {
+      widget.destroy();
+    });
+
+    test('0件 → resolve が not_found を返す', () => {
+      const resolved = resolve([]);
+      expect(resolved.category).toBe(RESULT_CATEGORY.NOT_FOUND);
+    });
+
+    test('0件 → editing 状態に遷移し input に keyword がセットされる', () => {
+      const onConfirm = jest.fn();
+      const onCancel = jest.fn();
+      widget.setState(STATES.EDITING, {
+        keyword: 'たなか商事',
+        sfObject: 'Account',
+        onConfirm,
+        onCancel,
+      });
+      expect(widget.getState()).toBe(STATES.EDITING);
+      const input = document.querySelector('.vfa-edit-input');
+      expect(input.value).toBe('たなか商事');
+    });
+
+    test('editing の onConfirm → 修正キーワードとオブジェクトで呼び出される', () => {
+      const onConfirm = jest.fn();
+      widget.setState(STATES.EDITING, {
+        keyword: 'たなか商事',
+        sfObject: 'Account',
+        onConfirm,
+      });
+      const input = document.querySelector('.vfa-edit-input');
+      input.value = '田中商事';
+      // オブジェクトを商談に切替
+      const oppBtn = document.querySelector('[data-object="Opportunity"]');
+      oppBtn.click();
+      document.querySelector('.vfa-btn-search').click();
+      expect(onConfirm).toHaveBeenCalledWith('田中商事', 'Opportunity');
+    });
+
+    test('再検索も0件 → error 状態（再編集しない）', () => {
+      const onConfirmSpy = jest.fn((_kw, _obj) => {
+        // isRetry=true のロジックをシミュレート: error にして終了
+        widget.setState(STATES.ERROR, { message: '「田中商事」は見つかりませんでした' });
+      });
+      widget.setState(STATES.EDITING, {
+        keyword: 'たなか商事',
+        sfObject: 'Account',
+        onConfirm: onConfirmSpy,
+      });
+      const input = document.querySelector('.vfa-edit-input');
+      input.value = '田中商事';
+      document.querySelector('.vfa-btn-search').click();
+      expect(widget.getState()).toBe(STATES.ERROR);
+      // editing 状態に戻らない（ループなし）
+      expect(widget.getState()).not.toBe(STATES.EDITING);
+      const el = document.getElementById('vfa-widget');
+      expect(el.querySelector('.vfa-message').textContent).toContain('見つかりませんでした');
+    });
+
+    test('Task の OBJECT_DISPLAY_FIELDS に Subject が含まれ Name は含まれない', () => {
+      expect(OBJECT_DISPLAY_FIELDS).toBeDefined();
+      expect(OBJECT_DISPLAY_FIELDS['Task']).toContain('Subject');
+      expect(OBJECT_DISPLAY_FIELDS['Task']).not.toContain('Name');
+    });
+
+    test('Account の OBJECT_DISPLAY_FIELDS に Name が含まれる', () => {
+      expect(OBJECT_DISPLAY_FIELDS['Account']).toContain('Name');
     });
   });
 
