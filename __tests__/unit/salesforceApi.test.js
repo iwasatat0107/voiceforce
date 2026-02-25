@@ -69,6 +69,103 @@ describe('SalesforceApi', () => {
     });
   });
 
+  describe('stripCompanySuffix - 法人格除去', () => {
+    test('suffix 株式会社 を除去する', () => {
+      expect(salesforceApi.stripCompanySuffix('ABC株式会社')).toBe('ABC');
+    });
+
+    test('prefix 株式会社 を除去する', () => {
+      expect(salesforceApi.stripCompanySuffix('株式会社ABC')).toBe('ABC');
+    });
+
+    test('有限会社 suffix を除去する', () => {
+      expect(salesforceApi.stripCompanySuffix('田中有限会社')).toBe('田中');
+    });
+
+    test('合同会社 suffix を除去する', () => {
+      expect(salesforceApi.stripCompanySuffix('テスト合同会社')).toBe('テスト');
+    });
+
+    test('ひらがな かぶしきがいしゃ を除去する', () => {
+      expect(salesforceApi.stripCompanySuffix('ABCかぶしきがいしゃ')).toBe('ABC');
+    });
+
+    test('ひらがな ゆうげんがいしゃ を除去する', () => {
+      expect(salesforceApi.stripCompanySuffix('田中ゆうげんがいしゃ')).toBe('田中');
+    });
+
+    test('（株） 略称を除去する', () => {
+      expect(salesforceApi.stripCompanySuffix('ABC（株）')).toBe('ABC');
+    });
+
+    test('(株) 略称を除去する', () => {
+      expect(salesforceApi.stripCompanySuffix('ABC(株)')).toBe('ABC');
+    });
+
+    test('㈱ 略称を除去する', () => {
+      expect(salesforceApi.stripCompanySuffix('ABC㈱')).toBe('ABC');
+    });
+
+    test('法人格なし → そのまま返す', () => {
+      expect(salesforceApi.stripCompanySuffix('テスト商事')).toBe('テスト商事');
+    });
+
+    test('全体が法人格のみ → 元の文字列を返す（空文字にしない）', () => {
+      expect(salesforceApi.stripCompanySuffix('株式会社')).toBe('株式会社');
+    });
+
+    test('スペースを挟む suffix も除去する', () => {
+      expect(salesforceApi.stripCompanySuffix('ABC 株式会社')).toBe('ABC');
+    });
+  });
+
+  describe('soslFuzzy - 曖昧SOSL検索', () => {
+    test('最初の検索でヒット → その結果を返す（fetch 1回のみ）', async () => {
+      mockFetchOk({ searchRecords: [{ Id: '001', Name: 'ABC株式会社' }] });
+      const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'ABC株式会社', 'Account');
+      expect(results).toHaveLength(1);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    test('suffix付きが0件 → suffix除去後でヒット（fetch 2回）', async () => {
+      mockFetchOk({ searchRecords: [] });                                  // ABC株式会社 → 0件
+      mockFetchOk({ searchRecords: [{ Id: '001', Name: 'ABC' }] });       // ABC → 1件
+      const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'ABC株式会社', 'Account');
+      expect(results).toHaveLength(1);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    test('ひらがな表記が0件 → suffix除去後でヒット', async () => {
+      mockFetchOk({ searchRecords: [] });                                  // ABCかぶしきがいしゃ → 0件
+      mockFetchOk({ searchRecords: [{ Id: '001', Name: 'ABC株式会社' }] }); // ABC → 1件
+      const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'ABCかぶしきがいしゃ', 'Account');
+      expect(results).toHaveLength(1);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    test('suffix なしのキーワードは追加検索しない（fetch 1回のみ）', async () => {
+      mockFetchOk({ searchRecords: [] });                                  // テスト商事 → 0件（suffix変換なし）
+      const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'テスト商事', 'Account');
+      expect(results).toEqual([]);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    test('スペース区切りのキーワード → 最初のトークンでも検索', async () => {
+      mockFetchOk({ searchRecords: [] });                                  // 田中 商事 → 0件
+      mockFetchOk({ searchRecords: [{ Id: '001', Name: '田中商事' }] }); // 田中 → 1件（firstToken）
+      const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, '田中 商事', 'Account');
+      expect(results).toHaveLength(1);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    test('全試行で0件 → 空配列を返す', async () => {
+      mockFetchOk({ searchRecords: [] }); // ABC株式会社 → 0件
+      mockFetchOk({ searchRecords: [] }); // ABC → 0件
+      const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'ABC株式会社', 'Account');
+      expect(results).toEqual([]);
+    });
+  });
+
   describe('soql - SOQLクエリ実行', () => {
     test('正常: クエリ結果レコードを返す', async () => {
       const records = [{ Id: '001xxx', Name: '田中商事' }];

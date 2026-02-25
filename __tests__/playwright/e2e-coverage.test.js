@@ -1262,7 +1262,7 @@ test('テスト7-1: 全 content_scripts ロード後 — content.js 依存グロ
     // lib/speechRecognition.js
     createSpeechRecognition: typeof window.createSpeechRecognition === 'function',
     // lib/salesforceApi.js
-    sosl:                    typeof window.sosl === 'function',
+    soslFuzzy:               typeof window.soslFuzzy === 'function',
     // lib/recordResolver.js
     resolve:                 typeof window.resolve === 'function',
     // ui/widget.js
@@ -1327,9 +1327,9 @@ test('テスト7-2: Option+V 核心フロー — widget が idle→listening に
 // テスト3-search-6〜8: SOSL 検索フロー（モック使用）
 //
 // 背景: salesforceApi.js / recordResolver.js が manifest.json に
-//       追加されたことで、content.js から sosl() / resolve() が
+//       追加されたことで、content.js から soslFuzzy() / resolve() が
 //       呼べるようになった。
-// テスト方針: window.sosl をモックし、recordResolver.resolve() の
+// テスト方針: window.soslFuzzy をモックし、recordResolver.resolve() の
 //       分岐ロジック（0件/1件/複数件）ごとに正しい動作を検証する。
 // ═══════════════════════════════════════════════════════════════
 
@@ -1341,8 +1341,8 @@ test('テスト3-search-6: SOSL 1件ヒット → buildRecordUrl で navigateTo 
   const result = await page.evaluate(
     async ({ instanceUrl, recordId }) => {
       return new Promise((okResult) => {
-        // sosl をモック（1件ヒット）
-        window.sosl = () => Promise.resolve([{ Id: recordId, Name: 'ABC株式会社' }]);
+        // soslFuzzy をモック（1件ヒット）
+        window.soslFuzzy = () => Promise.resolve([{ Id: recordId, Name: 'ABC株式会社' }]);
         window.navigateTo = (url) => okResult({ navigatedTo: url });
 
         const intent = window.match('ABC株式会社を検索して'); // eslint-disable-line no-undef
@@ -1354,7 +1354,7 @@ test('テスト3-search-6: SOSL 1件ヒット → buildRecordUrl で navigateTo 
         const keyword = intent.keyword;
         const sfObject = intent.object || 'Account';
 
-        window.sosl(instanceUrl, 'dummy-token', keyword, sfObject)
+        window.soslFuzzy(instanceUrl, 'dummy-token', keyword, sfObject)
           .then((records) => {
             const resolved = window.resolve(records); // eslint-disable-line no-undef
             if (resolved.category === 'single') {
@@ -1381,9 +1381,9 @@ test('テスト3-search-7: SOSL 0件 → resolve が not_found を返す', async
 
   const result = await page.evaluate(async () => {
     return new Promise((okResult) => {
-      window.sosl = () => Promise.resolve([]);
+      window.soslFuzzy = () => Promise.resolve([]);
 
-      window.sosl('https://myorg.my.salesforce.com', 'dummy', '存在しない会社', 'Account')
+      window.soslFuzzy('https://myorg.my.salesforce.com', 'dummy', '存在しない会社', 'Account')
         .then((records) => {
           const resolved = window.resolve(records); // eslint-disable-line no-undef
           okResult({ category: resolved.category, message: resolved.message });
@@ -1403,13 +1403,13 @@ test('テスト3-search-8: SOSL 複数件 → resolve が multiple を返す', a
 
   const result = await page.evaluate(async () => {
     return new Promise((okResult) => {
-      window.sosl = () => Promise.resolve([
+      window.soslFuzzy = () => Promise.resolve([
         { Id: '001000000000001AAA', Name: '田中商事A' },
         { Id: '001000000000002AAA', Name: '田中商事B' },
         { Id: '001000000000003AAA', Name: '田中商事C' },
       ]);
 
-      window.sosl('https://myorg.my.salesforce.com', 'dummy', '田中商事', 'Account')
+      window.soslFuzzy('https://myorg.my.salesforce.com', 'dummy', '田中商事', 'Account')
         .then((records) => {
           const resolved = window.resolve(records); // eslint-disable-line no-undef
           okResult({
