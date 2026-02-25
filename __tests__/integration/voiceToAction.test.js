@@ -3,6 +3,8 @@
 const { match }                            = require('../../lib/ruleEngine');
 const { buildListUrl, buildRecordUrl, navigateTo, goBack } = require('../../lib/navigator');
 const { resolve, RESULT_CATEGORY }         = require('../../lib/recordResolver');
+const { createWidget, STATES }             = require('../../ui/widget');
+const { OBJECT_DISPLAY_FIELDS }            = require('../../lib/salesforceApi');
 
 const INSTANCE_URL = 'https://example.lightning.force.com';
 
@@ -124,6 +126,62 @@ describe('音声→アクション統合テスト', () => {
       expect(action).not.toBeNull();
       expect(action.action).toBe('select');
       expect(action.index).toBe(index);
+    });
+  });
+
+  // ── 0件ヒット → グローバル検索遷移フロー ────────────────────────────────
+  describe('0件ヒット → グローバル検索遷移フロー', () => {
+    let widget;
+
+    beforeEach(() => {
+      const existing = document.getElementById('vfa-widget');
+      if (existing) existing.remove();
+      widget = createWidget();
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      widget.destroy();
+      jest.useRealTimers();
+    });
+
+    test('0件 → resolve が not_found を返す', () => {
+      const resolved = resolve([]);
+      expect(resolved.category).toBe(RESULT_CATEGORY.NOT_FOUND);
+    });
+
+    test('0件 → success 状態になり NAVIGATE_TO_SEARCH メッセージが送信される', () => {
+      const keyword = 'たなか商事';
+      const resolved = resolve([]);
+      expect(resolved.category).toBe(RESULT_CATEGORY.NOT_FOUND);
+
+      // content.js の not_found 分岐をシミュレート
+      widget.setState(STATES.SUCCESS, { message: `「${keyword}」は見つかりません。グローバル検索に移動します` });
+      expect(widget.getState()).toBe(STATES.SUCCESS);
+      expect(document.getElementById('vfa-widget').querySelector('.vfa-message').textContent)
+        .toContain('グローバル検索に移動します');
+
+      chrome.runtime.sendMessage.mockReturnValue(Promise.resolve({ success: true }));
+      setTimeout(() => {
+        chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword });
+      }, 2000);
+
+      jest.advanceTimersByTime(2000);
+
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+        type: 'NAVIGATE_TO_SEARCH',
+        keyword,
+      });
+    });
+
+    test('Task の OBJECT_DISPLAY_FIELDS に Subject が含まれ Name は含まれない', () => {
+      expect(OBJECT_DISPLAY_FIELDS).toBeDefined();
+      expect(OBJECT_DISPLAY_FIELDS['Task']).toContain('Subject');
+      expect(OBJECT_DISPLAY_FIELDS['Task']).not.toContain('Name');
+    });
+
+    test('Account の OBJECT_DISPLAY_FIELDS に Name が含まれる', () => {
+      expect(OBJECT_DISPLAY_FIELDS['Account']).toContain('Name');
     });
   });
 

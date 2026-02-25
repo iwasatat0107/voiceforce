@@ -119,6 +119,26 @@ describe('SalesforceApi', () => {
     });
   });
 
+  describe('hiraganaToKatakana / katakanaToHiragana — カナ変換', () => {
+    test('ひらがな → カタカナ', () => {
+      expect(salesforceApi.hiraganaToKatakana('てすと')).toBe('テスト');
+    });
+    test('カタカナ → ひらがな', () => {
+      expect(salesforceApi.katakanaToHiragana('テスト')).toBe('てすと');
+    });
+    test('漢字は変換されない', () => {
+      expect(salesforceApi.hiraganaToKatakana('田中てすと')).toBe('田中テスト');
+    });
+    test('混在文字列（ひらがな+カタカナ+漢字）', () => {
+      expect(salesforceApi.hiraganaToKatakana('てすとテスト田中')).toBe('テストテスト田中');
+      expect(salesforceApi.katakanaToHiragana('テストてすと田中')).toBe('てすとてすと田中');
+    });
+    test('変換対象なし（英字・漢字）→ そのまま返す', () => {
+      expect(salesforceApi.hiraganaToKatakana('ABC株式会社')).toBe('ABC株式会社');
+      expect(salesforceApi.katakanaToHiragana('ABC株式会社')).toBe('ABC株式会社');
+    });
+  });
+
   describe('soslFuzzy - 曖昧SOSL検索', () => {
     test('最初の検索でヒット → その結果を返す（fetch 1回のみ）', async () => {
       mockFetchOk({ searchRecords: [{ Id: '001', Name: 'ABC株式会社' }] });
@@ -143,9 +163,9 @@ describe('SalesforceApi', () => {
       expect(global.fetch).toHaveBeenCalledTimes(2);
     });
 
-    test('suffix なしのキーワードは追加検索しない（fetch 1回のみ）', async () => {
-      mockFetchOk({ searchRecords: [] });                                  // テスト商事 → 0件（suffix変換なし）
-      const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'テスト商事', 'Account');
+    test('suffix なし・カナなしのキーワードは追加検索しない（fetch 1回のみ）', async () => {
+      mockFetchOk({ searchRecords: [] });                                  // ABC商事 → 0件（suffix変換なし・カナ変換なし）
+      const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'ABC商事', 'Account');
       expect(results).toEqual([]);
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
@@ -163,6 +183,38 @@ describe('SalesforceApi', () => {
       mockFetchOk({ searchRecords: [] }); // ABC → 0件
       const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'ABC株式会社', 'Account');
       expect(results).toEqual([]);
+    });
+
+    test('ひらがな入力 → カタカナ変換後でヒット（てすと電機→テスト電機）', async () => {
+      // unique terms: [てすと電機, テスト電機]（stripped/k2h/firstToken は重複除去）
+      mockFetchOk({ searchRecords: [] });                                          // 1. てすと電機 → 0件
+      mockFetchOk({ searchRecords: [{ Id: '001', Name: 'テスト電機' }] });         // 2. テスト電機 → 1件
+      const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'てすと電機', 'Account');
+      expect(results).toHaveLength(1);
+      expect(results[0].Name).toBe('テスト電機');
+    });
+
+    test('カタカナ入力 → ひらがな変換後でヒット', async () => {
+      mockFetchOk({ searchRecords: [] });                                          // テスト商事 → 0件
+      mockFetchOk({ searchRecords: [{ Id: '001', Name: 'てすと商事' }] });         // てすと商事 → 1件
+      const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'テスト商事', 'Account');
+      expect(results).toHaveLength(1);
+    });
+
+    test('法人格除去後にカナ変換してヒット（てすとかぶしきがいしゃ → テスト）', async () => {
+      // unique terms: [てすとかぶしきがいしゃ, てすと, テストカブシキガイシャ, テスト]
+      mockFetchOk({ searchRecords: [] });   // 1. てすとかぶしきがいしゃ → 0件
+      mockFetchOk({ searchRecords: [] });   // 2. てすと（suffix除去）→ 0件
+      mockFetchOk({ searchRecords: [] });   // 3. テストカブシキガイシャ（h2k全体）→ 0件
+      mockFetchOk({ searchRecords: [{ Id: '001', Name: 'テスト' }] }); // 4. テスト（h2k stripped）→ 1件
+      const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'てすとかぶしきがいしゃ', 'Account');
+      expect(results).toHaveLength(1);
+    });
+
+    test('重複する変換は 1回のみ検索される（英字のみキーワード）', async () => {
+      mockFetchOk({ searchRecords: [] });
+      await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'abc', 'Account');
+      expect(global.fetch).toHaveBeenCalledTimes(1); // 重複除去で1回のみ
     });
   });
 

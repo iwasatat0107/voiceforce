@@ -344,6 +344,126 @@ describe('createWidget', () => {
   });
 
   // ──────────────────────────────────────
+  // editing 状態
+  // ──────────────────────────────────────
+  describe('editing 状態', () => {
+    test('setState(editing) → input に keyword が入る', () => {
+      widget.setState(STATES.EDITING, { keyword: 'たなか商事', sfObject: 'Account' });
+      const el = document.getElementById('vfa-widget');
+      const input = el.querySelector('.vfa-edit-input');
+      expect(input).not.toBeNull();
+      expect(input.value).toBe('たなか商事');
+    });
+
+    test('setState(editing) → 指定 sfObject が active になる', () => {
+      widget.setState(STATES.EDITING, { keyword: 'テスト', sfObject: 'Opportunity' });
+      const el = document.getElementById('vfa-widget');
+      const activeBtn = el.querySelector('.vfa-obj-active');
+      expect(activeBtn).not.toBeNull();
+      expect(activeBtn.getAttribute('data-object')).toBe('Opportunity');
+    });
+
+    test('setState(editing) → sfObject 未指定なら Account が active', () => {
+      widget.setState(STATES.EDITING, { keyword: 'テスト' });
+      const el = document.getElementById('vfa-widget');
+      const activeBtn = el.querySelector('.vfa-obj-active');
+      expect(activeBtn.getAttribute('data-object')).toBe('Account');
+    });
+
+    test('Enter キー → onConfirm(keyword, object) が呼ばれる', () => {
+      const onConfirm = jest.fn();
+      widget.setState(STATES.EDITING, { keyword: 'テスト', sfObject: 'Account', onConfirm });
+      const el = document.getElementById('vfa-widget');
+      const input = el.querySelector('.vfa-edit-input');
+      input.value = '田中商事';
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+      input.dispatchEvent(event);
+      expect(onConfirm).toHaveBeenCalledWith('田中商事', 'Account');
+    });
+
+    test('空文字で Enter → onConfirm は呼ばれない', () => {
+      const onConfirm = jest.fn();
+      widget.setState(STATES.EDITING, { keyword: '', sfObject: 'Account', onConfirm });
+      const el = document.getElementById('vfa-widget');
+      const input = el.querySelector('.vfa-edit-input');
+      input.value = '   ';
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+      input.dispatchEvent(event);
+      expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    test('Escape キー → onCancel が呼ばれる', () => {
+      const onCancel = jest.fn();
+      widget.setState(STATES.EDITING, { keyword: 'テスト', sfObject: 'Account', onCancel });
+      const el = document.getElementById('vfa-widget');
+      const input = el.querySelector('.vfa-edit-input');
+      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
+      input.dispatchEvent(event);
+      expect(onCancel).toHaveBeenCalled();
+    });
+
+    test('キャンセルボタン → onCancel が呼ばれる', () => {
+      const onCancel = jest.fn();
+      widget.setState(STATES.EDITING, { keyword: 'テスト', sfObject: 'Account', onCancel });
+      const el = document.getElementById('vfa-widget');
+      const cancelBtn = el.querySelector('.vfa-btn-cancel');
+      cancelBtn.click();
+      expect(onCancel).toHaveBeenCalled();
+    });
+
+    test('60秒後 → ERROR → 3秒後 IDLE', () => {
+      jest.useFakeTimers();
+      widget.setState(STATES.EDITING, { keyword: 'テスト', sfObject: 'Account' });
+      expect(widget.getState()).toBe(STATES.EDITING);
+      jest.advanceTimersByTime(60000);
+      expect(widget.getState()).toBe(STATES.ERROR);
+      jest.advanceTimersByTime(3000);
+      expect(widget.getState()).toBe(STATES.IDLE);
+      jest.useRealTimers();
+    });
+
+    test('IDLE 遷移時に edit-row が非表示になる', () => {
+      widget.setState(STATES.EDITING, { keyword: 'テスト', sfObject: 'Account' });
+      widget.setState(STATES.IDLE);
+      const el = document.getElementById('vfa-widget');
+      expect(el.querySelector('.vfa-edit-row').style.display).toBe('none');
+      expect(el.querySelector('.vfa-object-row').style.display).toBe('none');
+      expect(el.querySelector('.vfa-btn-cancel').style.display).toBe('none');
+    });
+
+    test('オブジェクトボタンクリックで active が切り替わる', () => {
+      widget.setState(STATES.EDITING, { keyword: 'テスト', sfObject: 'Account' });
+      const el = document.getElementById('vfa-widget');
+      const opportunityBtn = el.querySelector('[data-object="Opportunity"]');
+      opportunityBtn.click();
+      expect(opportunityBtn.classList.contains('vfa-obj-active')).toBe(true);
+      const accountBtn = el.querySelector('[data-object="Account"]');
+      expect(accountBtn.classList.contains('vfa-obj-active')).toBe(false);
+    });
+
+    test('🔍 ボタンクリック → onConfirm(keyword, object) が呼ばれる', () => {
+      const onConfirm = jest.fn();
+      widget.setState(STATES.EDITING, { keyword: 'たなか商事', sfObject: 'Account', onConfirm });
+      const el = document.getElementById('vfa-widget');
+      const input = el.querySelector('.vfa-edit-input');
+      input.value = '田中商事';
+      el.querySelector('.vfa-btn-search').click();
+      expect(onConfirm).toHaveBeenCalledWith('田中商事', 'Account');
+    });
+
+    test('getState() は editing を返す', () => {
+      widget.setState(STATES.EDITING, { keyword: 'テスト', sfObject: 'Account' });
+      expect(widget.getState()).toBe(STATES.EDITING);
+    });
+
+    test('data-state 属性が editing', () => {
+      widget.setState(STATES.EDITING, { keyword: 'テスト', sfObject: 'Account' });
+      const el = document.getElementById('vfa-widget');
+      expect(el.getAttribute('data-state')).toBe('editing');
+    });
+  });
+
+  // ──────────────────────────────────────
   // destroy
   // ──────────────────────────────────────
   describe('destroy', () => {
