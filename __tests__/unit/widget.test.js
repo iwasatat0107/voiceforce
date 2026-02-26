@@ -464,6 +464,57 @@ describe('createWidget', () => {
   });
 
   // ──────────────────────────────────────
+  // selecting 状態（候補選択待ち）
+  // ──────────────────────────────────────
+  describe('setState(selecting)', () => {
+    test('"候補を選択" ステータスでウィジェットを表示する', () => {
+      widget.setState(STATES.SELECTING, { message: '2件見つかりました。番号で選択してください。' });
+      const el = document.getElementById('vfa-widget');
+      expect(el.style.display).toBe('block');
+      expect(el.querySelector('.vfa-status').textContent).toBe('候補を選択');
+    });
+
+    test('message テキストをセットする', () => {
+      widget.setState(STATES.SELECTING, { message: '3件見つかりました。番号で選択してください。' });
+      const el = document.getElementById('vfa-widget');
+      expect(el.querySelector('.vfa-message').textContent).toBe('3件見つかりました。番号で選択してください。');
+    });
+
+    test('自動消滅しない（タイマーなし）', () => {
+      jest.useFakeTimers();
+      widget.setState(STATES.SELECTING, { message: '2件見つかりました。' });
+      jest.advanceTimersByTime(30000);
+      expect(widget.getState()).toBe(STATES.SELECTING);
+      jest.useRealTimers();
+    });
+
+    test('getState() は selecting を返す', () => {
+      widget.setState(STATES.SELECTING, { message: '2件見つかりました。' });
+      expect(widget.getState()).toBe(STATES.SELECTING);
+    });
+
+    test('data-state 属性が selecting', () => {
+      widget.setState(STATES.SELECTING, { message: '2件見つかりました。' });
+      const el = document.getElementById('vfa-widget');
+      expect(el.getAttribute('data-state')).toBe('selecting');
+    });
+
+    test('確認ボタンを非表示にする', () => {
+      widget.setState(STATES.SELECTING, { message: '2件見つかりました。' });
+      const el = document.getElementById('vfa-widget');
+      expect(el.querySelector('.vfa-confirm').style.display).toBe('none');
+    });
+
+    test('selecting から idle へ遷移できる', () => {
+      widget.setState(STATES.SELECTING, { message: '2件見つかりました。' });
+      widget.setState(STATES.IDLE);
+      expect(widget.getState()).toBe(STATES.IDLE);
+      const el = document.getElementById('vfa-widget');
+      expect(el.style.display).toBe('none');
+    });
+  });
+
+  // ──────────────────────────────────────
   // destroy
   // ──────────────────────────────────────
   describe('destroy', () => {

@@ -212,3 +212,69 @@
 .vfa-btn-search:hover {
   background: #1d4ed8;
 }
+
+/* selecting: 紫ボーダー（候補選択待ち） */
+#vfa-widget[data-state="selecting"] {
+  border-left: 3px solid #7c3aed;
+}
+
+#vfa-widget[data-state="selecting"] .vfa-status {
+  color: #7c3aed;
+}
+
+/* ── 候補リスト ── */
+#vfa-candidate-list {
+  position: fixed;
+  bottom: 120px;
+  right: 24px;
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 1px 4px rgba(0, 0, 0, 0.08);
+  padding: 8px 12px;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.vfa-candidate-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.vfa-candidate-item:last-child {
+  border-bottom: none;
+}
+
+.vfa-candidate-item:hover {
+  background: #f9fafb;
+  border-radius: 6px;
+}
+
+.vfa-candidate-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #7c3aed;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.vfa-candidate-name {
+  font-size: 13px;
+  color: #111827;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

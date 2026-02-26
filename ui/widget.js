@@ -11,6 +11,7 @@ const STATES = {
   CONFIRM:    'confirm',
   SUCCESS:    'success',
   ERROR:      'error',
+  SELECTING:  'selecting', // candidateList 選択待ち（自動消滅なし）
 };
 
 const DEFAULT_SUCCESS_DURATION_MS = 3000;
@@ -265,6 +266,13 @@ function createWidget() {
     if (state === STATES.ERROR) {
       statusEl.textContent = 'エラー';
       messageEl.textContent = opts.message || '';
+      return;
+    }
+
+    if (state === STATES.SELECTING) {
+      statusEl.textContent = '候補を選択';
+      messageEl.textContent = opts.message || '';
+      // 自動消滅なし。candidateList が hide() されるまで表示を維持する
       return;
     }
   }

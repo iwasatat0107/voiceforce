@@ -4,6 +4,7 @@ const { match }                            = require('../../lib/ruleEngine');
 const { buildListUrl, buildRecordUrl, navigateTo, goBack } = require('../../lib/navigator');
 const { resolve, RESULT_CATEGORY }         = require('../../lib/recordResolver');
 const { createWidget, STATES }             = require('../../ui/widget');
+const { createCandidateList }              = require('../../ui/candidateList');
 const { OBJECT_DISPLAY_FIELDS }            = require('../../lib/salesforceApi');
 
 const INSTANCE_URL = 'https://example.lightning.force.com';
@@ -129,19 +130,24 @@ describe('音声→アクション統合テスト', () => {
     });
   });
 
-  // ── 0件ヒット → グローバル検索遷移フロー ────────────────────────────────
-  describe('0件ヒット → グローバル検索遷移フロー', () => {
+  // ── 0件・複数件 → ウィジェット内完結フロー ──────────────────────────────
+  describe('0件・複数件 → ウィジェット内完結フロー', () => {
     let widget;
+    let cl;
 
     beforeEach(() => {
       const existing = document.getElementById('vfa-widget');
       if (existing) existing.remove();
+      const existingCL = document.getElementById('vfa-candidate-list');
+      if (existingCL) existingCL.remove();
       widget = createWidget();
+      cl = null;
       jest.useFakeTimers();
     });
 
     afterEach(() => {
       widget.destroy();
+      if (cl) cl.destroy();
       jest.useRealTimers();
     });
 
@@ -150,28 +156,57 @@ describe('音声→アクション統合テスト', () => {
       expect(resolved.category).toBe(RESULT_CATEGORY.NOT_FOUND);
     });
 
-    test('0件 → success 状態になり NAVIGATE_TO_SEARCH メッセージが送信される', () => {
+    test('0件 → error 状態に遷移し「見つかりませんでした」が表示される', () => {
       const keyword = 'たなか商事';
       const resolved = resolve([]);
       expect(resolved.category).toBe(RESULT_CATEGORY.NOT_FOUND);
 
       // content.js の not_found 分岐をシミュレート
-      widget.setState(STATES.SUCCESS, { message: `「${keyword}」は見つかりません。グローバル検索に移動します` });
-      expect(widget.getState()).toBe(STATES.SUCCESS);
+      widget.setState(STATES.ERROR, { message: `「${keyword}」は見つかりませんでした` });
+      expect(widget.getState()).toBe(STATES.ERROR);
       expect(document.getElementById('vfa-widget').querySelector('.vfa-message').textContent)
-        .toContain('グローバル検索に移動します');
+        .toContain('見つかりませんでした');
+    });
 
-      chrome.runtime.sendMessage.mockReturnValue(Promise.resolve({ success: true }));
-      setTimeout(() => {
-        chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword });
-      }, 2000);
+    test('0件 → 4秒後に idle へ自動遷移する', () => {
+      const keyword = 'たなか商事';
+      widget.setState(STATES.ERROR, { message: `「${keyword}」は見つかりませんでした` });
+      setTimeout(() => widget.setState(STATES.IDLE), 4000);
+      jest.advanceTimersByTime(4000);
+      expect(widget.getState()).toBe(STATES.IDLE);
+    });
 
-      jest.advanceTimersByTime(2000);
+    test('2-5件 → selecting 状態に遷移し candidateList が表示される', () => {
+      const records = [
+        { Id: 'acc001', Name: 'ABC株式会社' },
+        { Id: 'acc002', Name: 'ABC商事' },
+      ];
+      const resolved = resolve(records);
+      expect(resolved.category).toBe(RESULT_CATEGORY.MULTIPLE);
 
-      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
-        type: 'NAVIGATE_TO_SEARCH',
-        keyword,
-      });
+      cl = createCandidateList();
+      let selected = null;
+      cl.show(records, (_idx, record) => { selected = record; });
+
+      widget.setState(STATES.SELECTING, { message: resolved.message });
+      expect(widget.getState()).toBe(STATES.SELECTING);
+      expect(document.getElementById('vfa-candidate-list').style.display).toBe('block');
+
+      // 音声番号選択（「1番」）をシミュレート
+      const result = cl.selectByNumber(1);
+      expect(result).toBe(true);
+      expect(selected).toEqual(records[0]);
+    });
+
+    test('6件以上 → error 状態に遷移し絞り込みメッセージが表示される', () => {
+      const records = Array.from({ length: 7 }, (_, i) => ({ Id: `id${i}`, Name: `ABC${i}` }));
+      const resolved = resolve(records);
+      expect(resolved.category).toBe(RESULT_CATEGORY.TOO_MANY);
+
+      widget.setState(STATES.ERROR, { message: resolved.message });
+      expect(widget.getState()).toBe(STATES.ERROR);
+      expect(document.getElementById('vfa-widget').querySelector('.vfa-message').textContent)
+        .toContain('絞り込');
     });
 
     test('Task の OBJECT_DISPLAY_FIELDS に Subject が含まれ Name は含まれない', () => {

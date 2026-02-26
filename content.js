@@ -9,6 +9,8 @@ if (isSalesforceUrl) {
   let widget = null;
   let speech = null;
   let keepaliveTimer = null;
+  let candidateList = null;
+  let pendingCandidates = null; // { records, sfObject, instanceUrl }
 
   // 検索対象オブジェクトごとの取得フィールド（Task は Name の代わりに Subject を使用）
   const OBJECT_DISPLAY_FIELDS = {
@@ -47,10 +49,20 @@ if (isSalesforceUrl) {
     return widget;
   };
 
-  // 検索実行関数: 0件時はグローバル検索へ自動遷移
+  const getCandidateList = function() {
+    if (!candidateList && typeof createCandidateList === 'function') { // eslint-disable-line no-undef
+      candidateList = createCandidateList(); // eslint-disable-line no-undef
+    }
+    return candidateList;
+  };
+
+  // 検索実行関数: 0件・多件はウィジェット内で完結（外部ページ遷移なし）
   const runSearch = async function(keyword, sfObject) {
     const fields = OBJECT_DISPLAY_FIELDS[sfObject] || ['Id', 'Name'];
     const w = getWidget();
+    // 前回の候補選択状態をリセット
+    if (candidateList) candidateList.hide();
+    pendingCandidates = null;
     w.setState('processing', { message: `「${keyword}」を検索中...` });
 
     chrome.storage.local.get(['instance_url'], async (storageResult) => {
@@ -73,14 +85,8 @@ if (isSalesforceUrl) {
         const resolved = resolve(records); // eslint-disable-line no-undef
 
         if (resolved.category === 'not_found') {
-          w.setState('success', { message: `「${keyword}」は見つかりません。グローバル検索に移動します` });
-          setTimeout(() => {
-            // chrome.tabs.update では searchInput URL パラメータが Lightning SPA に無視されるため
-            // storage にキーワードを保存し、着地先の content.js が検索ボックスへ直接入力する
-            chrome.storage.local.set({ pendingSearch: keyword }, () => {
-              chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword }).catch(() => {});
-            });
-          }, 2000);
+          w.setState('error', { message: `「${keyword}」は見つかりませんでした` });
+          setTimeout(() => w.setState('idle'), 4000);
           return;
         }
 
@@ -90,14 +96,24 @@ if (isSalesforceUrl) {
           const displayName = resolved.record.Name || resolved.record.Subject || resolved.record.Id;
           w.setState('success', { message: `「${displayName}」を開きます` });
           setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
+        } else if (resolved.category === 'too_many') {
+          // 6件以上: 絞り込みを促す（遷移なし）
+          w.setState('error', { message: resolved.message });
+          setTimeout(() => w.setState('idle'), 4000);
         } else {
-          // multiple / too_many → 検索ページへ遷移（キーワードを storage 経由で渡す）
-          w.setState('success', { message: resolved.message });
-          setTimeout(() => {
-            chrome.storage.local.set({ pendingSearch: keyword }, () => {
-              chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword }).catch(() => {});
-            });
-          }, 1000);
+          // multiple (2〜5件): candidateList に候補を表示し音声番号選択を待つ
+          const cl = getCandidateList();
+          pendingCandidates = { records: resolved.candidates, sfObject, instanceUrl };
+          cl.show(resolved.candidates, (_idx, record) => {
+            // クリック選択
+            cl.hide();
+            pendingCandidates = null;
+            const url = buildRecordUrl(instanceUrl, sfObject, record.Id); // eslint-disable-line no-undef
+            const displayName = record.Name || record.Subject || record.Id;
+            w.setState('success', { message: `「${displayName}」を開きます` });
+            setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
+          });
+          w.setState('selecting', { message: resolved.message });
         }
       } catch (err) {
         console.warn('[VF] search error:', err.message);
@@ -169,6 +185,27 @@ if (isSalesforceUrl) {
           const sfObject = intent.object || 'Account';
           runSearch(keyword, sfObject);
 
+        } else if (intent && intent.action === 'select') {
+          // 候補リスト表示中の音声番号選択（「1番」「2」など）
+          if (pendingCandidates) {
+            const { records, sfObject: ps, instanceUrl: pi } = pendingCandidates;
+            const record = records[intent.index - 1];
+            if (record) {
+              const cl = getCandidateList();
+              cl.hide();
+              pendingCandidates = null;
+              const url = buildRecordUrl(pi, ps, record.Id); // eslint-disable-line no-undef
+              const displayName = record.Name || record.Subject || record.Id;
+              w.setState('success', { message: `「${displayName}」を開きます` });
+              setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
+            } else {
+              w.setState('error', { message: `1〜${records.length}番で選んでください` });
+              setTimeout(() => w.setState('idle'), 3000);
+            }
+          } else {
+            w.setState('success', { message: `認識: ${transcript}` });
+          }
+
         } else {
           w.setState('success', { message: `認識: ${transcript}` });
         }
@@ -188,74 +225,6 @@ if (isSalesforceUrl) {
 
     speech.start();
   };
-
-  // グローバル検索ページ着地時にキーワードを検索ボックスへ自動入力する。
-  // Salesforce LWC は open Shadow DOM を使用するため shadowRoot を再帰的に辿って input を探す。
-  // chrome.tabs.update での searchInput URL パラメータは Lightning SPA に無視されるため
-  // storage 経由でキーワードを渡し、Shadow DOM を貫通して input に書き込む。
-  if (window.location.pathname === '/lightning/search') {
-    chrome.storage.local.get(['pendingSearch'], ({ pendingSearch }) => {
-      if (!pendingSearch) return;
-      chrome.storage.local.remove('pendingSearch');
-      console.warn('[VF] /lightning/search 着地、pendingSearch:', pendingSearch);
-
-      // open Shadow DOM を含めて再帰的に「可視の」selector に一致する要素を探す。
-      // querySelector は hidden input を先に返すため querySelectorAll でサイズ確認してスキップ。
-      const queryShadow = function(sel, root, depth) {
-        if (depth > 7) return null;
-        for (const el of root.querySelectorAll(sel)) {
-          if (el.offsetWidth > 0 || el.offsetHeight > 0) return el;
-        }
-        for (const node of root.querySelectorAll('*')) {
-          if (node.shadowRoot) {
-            const found = queryShadow(sel, node.shadowRoot, depth + 1);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-
-      // 全 input（hidden 含む）を Shadow DOM ごと列挙してログ出力（デバッグ用）
-      const logAllInputs = function(root, depth) {
-        if (depth > 7) return;
-        for (const el of root.querySelectorAll('input')) {
-          console.warn('[VF] input:', el.type, el.offsetWidth + 'x' + el.offsetHeight,
-            'ph:', el.placeholder, 'id:', el.id, 'name:', el.name, 'class:', el.className);
-        }
-        for (const node of root.querySelectorAll('*')) {
-          if (node.shadowRoot) logAllInputs(node.shadowRoot, depth + 1);
-        }
-      };
-
-      const fillSearchInput = function(keyword, attempts) {
-        if (attempts <= 0) {
-          console.warn('[VF] 検索ボックス（可視）が見つかりませんでした。全 input を列挙:');
-          logAllInputs(document, 0);
-          return;
-        }
-        // Salesforce グローバル検索は id="sfnavQuickSearch" の type="text" input（Shadow DOM 内）
-        // 直接 id で探し、見つからなければ type="text" → type="search" の順でフォールバック
-        const input = queryShadow('#sfnavQuickSearch', document, 0)
-          || queryShadow('input[type="text"]', document, 0)
-          || queryShadow('input[type="search"]', document, 0);
-        if (input) {
-          console.warn('[VF] 検索ボックス発見 size:', input.offsetWidth, 'x', input.offsetHeight,
-            'type:', input.type, 'ph:', input.placeholder, 'id:', input.id);
-          input.focus();
-          setTimeout(() => {
-            document.execCommand('insertText', false, keyword);
-            console.warn('[VF] execCommand 後 value:', input.value);
-          }, 100);
-        } else {
-          console.warn('[VF] 検索ボックス未発見（可視）、再試行... 残り', attempts - 1);
-          setTimeout(() => fillSearchInput(keyword, attempts - 1), 500);
-        }
-      };
-
-      // Salesforce の初期レンダリング（約 1.5 秒）を待ってから実行
-      setTimeout(() => fillSearchInput(pendingSearch, 10), 1500);
-    });
-  }
 
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'TOGGLE_VOICE') {
