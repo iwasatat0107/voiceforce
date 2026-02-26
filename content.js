@@ -198,6 +198,29 @@ if (isSalesforceUrl) {
           const sfObject = intent.object || 'Account';
           runSearch(keyword, sfObject);
 
+        } else if (intent && intent.action === 'help') {
+          const HELP_TEXT = [
+            '── 一覧を開く ──',
+            '「商談」「取引先」「リード」',
+            '「すべての商談を開いて」',
+            '「最近の商談を開いて」',
+            '「自分の商談を開いて」',
+            '',
+            '── レコードを検索 ──',
+            '「田中商事の商談を開いて」',
+            '「ABC株式会社を見せて」',
+            '「取引先でABCを検索して」',
+            '',
+            '── 候補が複数のとき ──',
+            '「1番」〜「5番」でレコードを選択',
+            '',
+            '── その他 ──',
+            '「戻って」「戻る」「バック」',
+            '「ヘルプ」でこの画面を再表示',
+          ].join('\n');
+          // duration: null で自動消滅しない（ユーザーが読み終えるまで表示）
+          w.setState('success', { message: HELP_TEXT, duration: null });
+
         } else if (intent && intent.action === 'select') {
           // 候補リスト表示中の音声番号選択（「1番」「2」など）
           if (pendingCandidates) {
@@ -220,7 +243,11 @@ if (isSalesforceUrl) {
           }
 
         } else {
-          w.setState('success', { message: `認識: ${transcript}` });
+          // ruleEngine にマッチしないコマンド → ユーザーに使い方を案内
+          w.setState('error', {
+            message: `「${transcript}」は未対応のコマンドです\n「ヘルプ」と言うと使い方を確認できます`,
+          });
+          setTimeout(() => w.setState('idle'), 4000);
         }
       },
       onError: (err) => {
