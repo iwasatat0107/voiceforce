@@ -179,20 +179,19 @@ describe('音声→アクション統合テスト', () => {
       expect(onConfirm).toHaveBeenCalledWith('田中商事', 'Account');
     });
 
-    test('0件（再検索）→ error 状態に遷移し「見つかりませんでした」が表示される', () => {
+    test('0件（再検索）→ success 状態に遷移し「検索不一致」が表示される', () => {
       const keyword = '田中商事';
       // isRetry=true の分岐をシミュレート
-      widget.setState(STATES.ERROR, { message: `「${keyword}」は見つかりませんでした` });
-      expect(widget.getState()).toBe(STATES.ERROR);
+      widget.setState(STATES.SUCCESS, { message: `検索不一致：「${keyword}」は見つかりませんでした` });
+      expect(widget.getState()).toBe(STATES.SUCCESS);
       expect(document.getElementById('vfa-widget').querySelector('.vfa-message').textContent)
-        .toContain('見つかりませんでした');
+        .toContain('検索不一致');
     });
 
-    test('0件（再検索）→ 4秒後に idle へ自動遷移する', () => {
+    test('0件（再検索）→ 3秒後に idle へ自動遷移する', () => {
       const keyword = '田中商事';
-      widget.setState(STATES.ERROR, { message: `「${keyword}」は見つかりませんでした` });
-      setTimeout(() => widget.setState(STATES.IDLE), 4000);
-      jest.advanceTimersByTime(4000);
+      widget.setState(STATES.SUCCESS, { message: `検索不一致：「${keyword}」は見つかりませんでした` });
+      jest.advanceTimersByTime(3000);
       expect(widget.getState()).toBe(STATES.IDLE);
     });
 

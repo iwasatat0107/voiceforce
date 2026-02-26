@@ -87,9 +87,8 @@ if (isSalesforceUrl) {
 
         if (resolved.category === 'not_found') {
           if (isRetry) {
-            // 再検索後も0件 → エラーで終了（EDITING ループなし）
-            w.setState('error', { message: `「${keyword}」は見つかりませんでした` });
-            setTimeout(() => w.setState('idle'), 4000);
+            // 再検索後も0件 → 検索不一致メッセージで終了（EDITING ループなし）
+            w.setState('success', { message: `検索不一致：「${keyword}」は見つかりませんでした` });
           } else {
             // 初回0件 → EDITING 状態でキーワードを手動修正して再検索できるようにする
             w.setState('editing', {

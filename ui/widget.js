@@ -79,7 +79,7 @@ function createWidget() {
 
   const OBJECT_LABELS = [
     { api: 'Account',     label: '取引先' },
-    { api: 'Contact',     label: '責任者' },
+    { api: 'Contact',     label: '取引先責任者' },
     { api: 'Lead',        label: 'リード' },
     { api: 'Opportunity', label: '商談'   },
     { api: 'Task',        label: 'ToDo'   },
