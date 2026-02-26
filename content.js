@@ -199,11 +199,13 @@ if (isSalesforceUrl) {
       chrome.storage.local.remove('pendingSearch');
       console.warn('[VF] /lightning/search 着地、pendingSearch:', pendingSearch);
 
-      // open Shadow DOM を含めて再帰的に selector に一致する要素を探す
+      // open Shadow DOM を含めて再帰的に「可視の」selector に一致する要素を探す。
+      // querySelector は hidden input を先に返すため querySelectorAll でサイズ確認してスキップ。
       const queryShadow = function(sel, root, depth) {
         if (depth > 7) return null;
-        const el = root.querySelector(sel);
-        if (el) return el;
+        for (const el of root.querySelectorAll(sel)) {
+          if (el.offsetWidth > 0 || el.offsetHeight > 0) return el;
+        }
         for (const node of root.querySelectorAll('*')) {
           if (node.shadowRoot) {
             const found = queryShadow(sel, node.shadowRoot, depth + 1);
@@ -213,28 +215,37 @@ if (isSalesforceUrl) {
         return null;
       };
 
+      // 全 input（hidden 含む）を Shadow DOM ごと列挙してログ出力（デバッグ用）
+      const logAllInputs = function(root, depth) {
+        if (depth > 7) return;
+        for (const el of root.querySelectorAll('input')) {
+          console.warn('[VF] input:', el.type, el.offsetWidth + 'x' + el.offsetHeight,
+            'ph:', el.placeholder, 'id:', el.id, 'name:', el.name, 'class:', el.className);
+        }
+        for (const node of root.querySelectorAll('*')) {
+          if (node.shadowRoot) logAllInputs(node.shadowRoot, depth + 1);
+        }
+      };
+
       const fillSearchInput = function(keyword, attempts) {
         if (attempts <= 0) {
-          console.warn('[VF] 検索ボックスが見つかりませんでした（Shadow DOM 全探索後）');
+          console.warn('[VF] 検索ボックス（可視）が見つかりませんでした。全 input を列挙:');
+          logAllInputs(document, 0);
           return;
         }
-        // input[type="search"] が見つからなければ placeholder で絞り込む
+        // type="search" → type="text" の順で可視 input を探す
         const input = queryShadow('input[type="search"]', document, 0)
-          || queryShadow('input[placeholder*="検索"]', document, 0);
+          || queryShadow('input[type="text"]', document, 0);
         if (input) {
-          console.warn('[VF] 検索ボックス発見 size:', input.offsetWidth, 'x', input.offsetHeight, 'placeholder:', input.placeholder);
-          // LWC 制御 input は focus() を受け取ると内部状態（空文字）で再レンダリングし
-          // value セッターで設定した値を上書きする。
-          // そのため: focus() → 100ms 待機（LWC の再レンダリング完了） → execCommand でテキスト挿入。
-          // execCommand('insertText') はブラウザネイティブな入力イベントを発生させるため
-          // LWC の内部状態も更新され、値が残る。
+          console.warn('[VF] 検索ボックス発見 size:', input.offsetWidth, 'x', input.offsetHeight,
+            'type:', input.type, 'ph:', input.placeholder, 'id:', input.id);
           input.focus();
           setTimeout(() => {
             document.execCommand('insertText', false, keyword);
             console.warn('[VF] execCommand 後 value:', input.value);
           }, 100);
         } else {
-          console.warn('[VF] 検索ボックス未発見、再試行... 残り', attempts - 1);
+          console.warn('[VF] 検索ボックス未発見（可視）、再試行... 残り', attempts - 1);
           setTimeout(() => fillSearchInput(keyword, attempts - 1), 500);
         }
       };
