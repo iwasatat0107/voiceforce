@@ -222,14 +222,17 @@ if (isSalesforceUrl) {
         const input = queryShadow('input[type="search"]', document, 0)
           || queryShadow('input[placeholder*="検索"]', document, 0);
         if (input) {
-          console.warn('[VF] 検索ボックス発見 →', input.tagName, input.placeholder);
-          // value をセットして focus するだけ（input イベントは dispatch しない）。
-          // input イベントを dispatch すると Salesforce の自動検索が走りスピナーが止まらなくなる。
-          // ユーザーが1文字入力した時点で LWC が event.target.value（= キーワード + 入力文字）を読み取るため
-          // キーワードはそのまま残って検索に使われる。
-          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-          setter.call(input, keyword);
+          console.warn('[VF] 検索ボックス発見 size:', input.offsetWidth, 'x', input.offsetHeight, 'placeholder:', input.placeholder);
+          // LWC 制御 input は focus() を受け取ると内部状態（空文字）で再レンダリングし
+          // value セッターで設定した値を上書きする。
+          // そのため: focus() → 100ms 待機（LWC の再レンダリング完了） → execCommand でテキスト挿入。
+          // execCommand('insertText') はブラウザネイティブな入力イベントを発生させるため
+          // LWC の内部状態も更新され、値が残る。
           input.focus();
+          setTimeout(() => {
+            document.execCommand('insertText', false, keyword);
+            console.warn('[VF] execCommand 後 value:', input.value);
+          }, 100);
         } else {
           console.warn('[VF] 検索ボックス未発見、再試行... 残り', attempts - 1);
           setTimeout(() => fillSearchInput(keyword, attempts - 1), 500);
