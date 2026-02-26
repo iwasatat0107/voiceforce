@@ -163,11 +163,15 @@ describe('SalesforceApi', () => {
       expect(global.fetch).toHaveBeenCalledTimes(2);
     });
 
-    test('suffix なし・カナなしのキーワードは追加検索しない（fetch 1回のみ）', async () => {
-      mockFetchOk({ searchRecords: [] });                                  // ABC商事 → 0件（suffix変換なし・カナ変換なし）
+    test('suffix なし・カナなしのキーワードはPhase1が1回、Phase2でワイルドカード1回（計2回）', async () => {
+      mockFetchOk({ searchRecords: [] }); // Phase1: ABC商事 → 0件
+      mockFetchOk({ searchRecords: [] }); // Phase2: ABC商事* → 0件
       const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'ABC商事', 'Account');
       expect(results).toEqual([]);
-      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      // Phase2のクエリに * が含まれることを確認
+      const [url2] = global.fetch.mock.calls[1];
+      expect(decodeURIComponent(url2)).toContain('ABC商事*');
     });
 
     test('スペース区切りのキーワード → 最初のトークンでも検索', async () => {
@@ -179,10 +183,31 @@ describe('SalesforceApi', () => {
     });
 
     test('全試行で0件 → 空配列を返す', async () => {
-      mockFetchOk({ searchRecords: [] }); // ABC株式会社 → 0件
-      mockFetchOk({ searchRecords: [] }); // ABC → 0件
+      // Phase1: ABC株式会社, ABC の2回
+      // Phase2: ABC株式会社*(9文字>=4, yes), ABC(3文字<4, skip) → 1回
+      mockFetchOk({ searchRecords: [] }); // Phase1: ABC株式会社
+      mockFetchOk({ searchRecords: [] }); // Phase1: ABC
+      mockFetchOk({ searchRecords: [] }); // Phase2: ABC株式会社*
       const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'ABC株式会社', 'Account');
       expect(results).toEqual([]);
+    });
+
+    test('Phase2ワイルドカードでヒット（末尾1文字欠け: ABC株式会 → ABC株式会社）', async () => {
+      // terms: ["ABC株式会"] (stripped同値, カナ変換なし, firstToken同値 → dedup1件)
+      mockFetchOk({ searchRecords: [] });                                          // Phase1: ABC株式会 → 0件
+      mockFetchOk({ searchRecords: [{ Id: '001', Name: 'ABC株式会社' }] });        // Phase2: ABC株式会* → 1件
+      const results = await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'ABC株式会', 'Account');
+      expect(results).toHaveLength(1);
+      expect(results[0].Name).toBe('ABC株式会社');
+      // Phase2のクエリに * が含まれることを確認
+      const [url2] = global.fetch.mock.calls[1];
+      expect(decodeURIComponent(url2)).toContain('ABC株式会*');
+    });
+
+    test('3文字以下のキーワードはPhase2ワイルドカードをスキップする', async () => {
+      mockFetchOk({ searchRecords: [] }); // Phase1のみ
+      await salesforceApi.soslFuzzy(INSTANCE_URL, ACCESS_TOKEN, 'abc', 'Account');
+      expect(global.fetch).toHaveBeenCalledTimes(1); // Phase2はスキップ(3<4)
     });
 
     test('ひらがな入力 → カタカナ変換後でヒット（てすと電機→テスト電機）', async () => {
