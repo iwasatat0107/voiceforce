@@ -254,4 +254,65 @@ describe('音声→アクション統合テスト', () => {
       expect(url).toBe(`${INSTANCE_URL}/lightning/r/Opportunity/opp002/view`);
     });
   });
+
+  // ── ヘルプコマンド ────────────────────────────────────────────────────────
+  describe('ヘルプコマンド（#73）', () => {
+    test('「ヘルプ」は ruleEngine で action: help に変換される', () => {
+      const intent = match('ヘルプ');
+      expect(intent).not.toBeNull();
+      expect(intent.action).toBe('help');
+    });
+
+    test('「使い方」は ruleEngine で action: help に変換される', () => {
+      const intent = match('使い方');
+      expect(intent).not.toBeNull();
+      expect(intent.action).toBe('help');
+    });
+
+    test('help intent を受けたウィジェットは success 状態で自動消滅しない', () => {
+      jest.useFakeTimers();
+      const existing = document.getElementById('vfa-widget');
+      if (existing) existing.remove();
+      const w = createWidget();
+
+      // ヘルプ表示: duration: null で自動消滅しない
+      w.setState(STATES.SUCCESS, { message: 'ヘルプ一覧', duration: null });
+      jest.advanceTimersByTime(60000);
+      expect(w.getState()).toBe(STATES.SUCCESS);
+
+      w.destroy();
+      jest.useRealTimers();
+    });
+  });
+
+  // ── 未認識コマンド（#74）──────────────────────────────────────────────────
+  describe('未認識コマンド（#74）', () => {
+    test('ruleEngine にマッチしない発話は null を返す', () => {
+      expect(match('今月のパイプラインを教えて')).toBeNull();
+      expect(match('山田さんの商談を更新して')).toBeNull();
+      expect(match('')).toBeNull();
+    });
+
+    test('ruleEngine が null のとき error state でガイドメッセージを表示する', () => {
+      jest.useFakeTimers();
+      const existing = document.getElementById('vfa-widget');
+      if (existing) existing.remove();
+      const w = createWidget();
+
+      const transcript = '今月のパイプラインを教えて';
+      w.setState(STATES.ERROR, {
+        message: `「${transcript}」は未対応のコマンドです\n「ヘルプ」と言うと使い方を確認できます`,
+      });
+
+      expect(w.getState()).toBe(STATES.ERROR);
+      const el = document.getElementById('vfa-widget');
+      expect(el.querySelector('.vfa-message').textContent)
+        .toContain('未対応のコマンドです');
+      expect(el.querySelector('.vfa-message').textContent)
+        .toContain('ヘルプ');
+
+      w.destroy();
+      jest.useRealTimers();
+    });
+  });
 });

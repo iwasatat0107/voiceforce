@@ -259,7 +259,10 @@ function createWidget() {
       messageEl.textContent = opts.message || '';
       const duration =
         opts.duration !== undefined ? opts.duration : DEFAULT_SUCCESS_DURATION_MS;
-      successTimer = setTimeout(() => setState(STATES.IDLE), duration);
+      // duration: null の場合は自動消滅しない（ヘルプ表示など、ユーザーが読み終えるまで残す用途）
+      if (duration !== null) {
+        successTimer = setTimeout(() => setState(STATES.IDLE), duration);
+      }
       return;
     }
 

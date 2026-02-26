@@ -255,6 +255,14 @@ describe('createWidget', () => {
       expect(el.style.display).toBe('none');
     });
 
+    test('duration: null のとき自動消滅しない（ヘルプ表示用）', () => {
+      widget.setState(STATES.SUCCESS, { message: 'ヘルプテキスト', duration: null });
+      const el = document.getElementById('vfa-widget');
+      jest.advanceTimersByTime(60000);
+      expect(el.style.display).toBe('block');
+      expect(widget.getState()).toBe(STATES.SUCCESS);
+    });
+
     test('getState() は success を返す', () => {
       widget.setState(STATES.SUCCESS, { message: '完了' });
       expect(widget.getState()).toBe(STATES.SUCCESS);
