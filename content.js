@@ -57,7 +57,8 @@ if (isSalesforceUrl) {
   };
 
   // 検索実行関数: 0件・多件はウィジェット内で完結（外部ページ遷移なし）
-  const runSearch = async function(keyword, sfObject) {
+  // isRetry=true の場合は再検索後も0件なら error で終了（EDITING ループ防止）
+  const runSearch = async function(keyword, sfObject, isRetry) {
     const fields = OBJECT_DISPLAY_FIELDS[sfObject] || ['Id', 'Name'];
     const w = getWidget();
     // 前回の候補選択状態をリセット
@@ -85,8 +86,21 @@ if (isSalesforceUrl) {
         const resolved = resolve(records); // eslint-disable-line no-undef
 
         if (resolved.category === 'not_found') {
-          w.setState('error', { message: `「${keyword}」は見つかりませんでした` });
-          setTimeout(() => w.setState('idle'), 4000);
+          if (isRetry) {
+            // 再検索後も0件 → エラーで終了（EDITING ループなし）
+            w.setState('error', { message: `「${keyword}」は見つかりませんでした` });
+            setTimeout(() => w.setState('idle'), 4000);
+          } else {
+            // 初回0件 → EDITING 状態でキーワードを手動修正して再検索できるようにする
+            w.setState('editing', {
+              keyword,
+              sfObject,
+              onConfirm: (correctedKeyword, correctedObject) => {
+                runSearch(correctedKeyword, correctedObject, true);
+              },
+              onCancel: () => { w.setState('idle'); },
+            });
+          }
           return;
         }
 

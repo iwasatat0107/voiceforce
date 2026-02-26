@@ -156,20 +156,40 @@ describe('音声→アクション統合テスト', () => {
       expect(resolved.category).toBe(RESULT_CATEGORY.NOT_FOUND);
     });
 
-    test('0件 → error 状態に遷移し「見つかりませんでした」が表示される', () => {
+    test('0件（初回）→ editing 状態に遷移しキーワードが入力欄にセットされる', () => {
       const keyword = 'たなか商事';
       const resolved = resolve([]);
       expect(resolved.category).toBe(RESULT_CATEGORY.NOT_FOUND);
 
-      // content.js の not_found 分岐をシミュレート
+      // content.js の not_found 初回分岐をシミュレート
+      const onConfirm = jest.fn();
+      widget.setState(STATES.EDITING, { keyword, sfObject: 'Account', onConfirm, onCancel: jest.fn() });
+      expect(widget.getState()).toBe(STATES.EDITING);
+      const input = document.getElementById('vfa-widget').querySelector('.vfa-edit-input');
+      expect(input.value).toBe(keyword);
+    });
+
+    test('0件（初回）→ editing から Enter で onConfirm が呼ばれる', () => {
+      const keyword = 'たなか商事';
+      const onConfirm = jest.fn();
+      widget.setState(STATES.EDITING, { keyword, sfObject: 'Account', onConfirm, onCancel: jest.fn() });
+      const input = document.getElementById('vfa-widget').querySelector('.vfa-edit-input');
+      input.value = '田中商事';
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      expect(onConfirm).toHaveBeenCalledWith('田中商事', 'Account');
+    });
+
+    test('0件（再検索）→ error 状態に遷移し「見つかりませんでした」が表示される', () => {
+      const keyword = '田中商事';
+      // isRetry=true の分岐をシミュレート
       widget.setState(STATES.ERROR, { message: `「${keyword}」は見つかりませんでした` });
       expect(widget.getState()).toBe(STATES.ERROR);
       expect(document.getElementById('vfa-widget').querySelector('.vfa-message').textContent)
         .toContain('見つかりませんでした');
     });
 
-    test('0件 → 4秒後に idle へ自動遷移する', () => {
-      const keyword = 'たなか商事';
+    test('0件（再検索）→ 4秒後に idle へ自動遷移する', () => {
+      const keyword = '田中商事';
       widget.setState(STATES.ERROR, { message: `「${keyword}」は見つかりませんでした` });
       setTimeout(() => widget.setState(STATES.IDLE), 4000);
       jest.advanceTimersByTime(4000);
