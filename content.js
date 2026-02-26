@@ -233,9 +233,11 @@ if (isSalesforceUrl) {
           logAllInputs(document, 0);
           return;
         }
-        // type="search" → type="text" の順で可視 input を探す
-        const input = queryShadow('input[type="search"]', document, 0)
-          || queryShadow('input[type="text"]', document, 0);
+        // Salesforce グローバル検索は id="sfnavQuickSearch" の type="text" input（Shadow DOM 内）
+        // 直接 id で探し、見つからなければ type="text" → type="search" の順でフォールバック
+        const input = queryShadow('#sfnavQuickSearch', document, 0)
+          || queryShadow('input[type="text"]', document, 0)
+          || queryShadow('input[type="search"]', document, 0);
         if (input) {
           console.warn('[VF] 検索ボックス発見 size:', input.offsetWidth, 'x', input.offsetHeight,
             'type:', input.type, 'ph:', input.placeholder, 'id:', input.id);
