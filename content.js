@@ -9,6 +9,17 @@ if (isSalesforceUrl) {
   let widget = null;
   let speech = null;
   let keepaliveTimer = null;
+  let candidateList = null;
+  let pendingCandidates = null; // { records, sfObject, instanceUrl }
+
+  // 検索対象オブジェクトごとの取得フィールド（Task は Name の代わりに Subject を使用）
+  const OBJECT_DISPLAY_FIELDS = {
+    'Account':     ['Id', 'Name'],
+    'Contact':     ['Id', 'Name', 'Email'],
+    'Lead':        ['Id', 'Name', 'Company'],
+    'Opportunity': ['Id', 'Name', 'StageName'],
+    'Task':        ['Id', 'Subject', 'Status'],
+  };
 
   // SW キープアライブ: MV3 Service Worker は ~30秒の無活動でシャットダウンする。
   // 音声認識中（5〜15秒）に SW が終了すると GET_VALID_TOKEN が失敗するため、
@@ -36,7 +47,107 @@ if (isSalesforceUrl) {
       widget = createWidget(); // eslint-disable-line no-undef
     }
     return widget;
-  }
+  };
+
+  const getCandidateList = function() {
+    if (!candidateList && typeof createCandidateList === 'function') { // eslint-disable-line no-undef
+      candidateList = createCandidateList(); // eslint-disable-line no-undef
+    }
+    return candidateList;
+  };
+
+  // 検索実行関数: 0件・多件はウィジェット内で完結（外部ページ遷移なし）
+  // isRetry=true の場合は再検索後も0件なら error で終了（EDITING ループ防止）
+  const runSearch = async function(keyword, sfObject, isRetry) {
+    const fields = OBJECT_DISPLAY_FIELDS[sfObject] || ['Id', 'Name'];
+    const w = getWidget();
+    // 前回の候補選択状態をリセット
+    if (candidateList) candidateList.hide();
+    pendingCandidates = null;
+    w.setState('processing', { message: `「${keyword}」を検索中...` });
+
+    chrome.storage.local.get(['instance_url'], async (storageResult) => {
+      const instanceUrl = storageResult.instance_url || window.location.origin;
+      try {
+        // アクセストークン取得
+        const token = await new Promise((tokenRes, tokenRej) => {
+          chrome.runtime.sendMessage({ type: 'GET_VALID_TOKEN' }, (r) => {
+            if (chrome.runtime.lastError) {
+              tokenRej(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (r && r.success) { tokenRes(r.token); return; }
+            tokenRej(new Error(r?.error || 'トークン取得に失敗しました'));
+          });
+        });
+
+        // SOSL 曖昧検索（法人格の漢字/ひらがな表記ゆれに対応）
+        const records = await soslFuzzy(instanceUrl, token, keyword, sfObject, fields); // eslint-disable-line no-undef
+        const resolved = resolve(records); // eslint-disable-line no-undef
+
+        if (resolved.category === 'not_found') {
+          if (isRetry) {
+            // 再検索後も0件 → 検索不一致メッセージで終了（EDITING ループなし）
+            w.setState('success', { message: `検索不一致：「${keyword}」は見つかりませんでした` });
+          } else {
+            // 初回0件 → EDITING 状態でキーワードを手動修正して再検索できるようにする
+            w.setState('editing', {
+              keyword,
+              sfObject,
+              onConfirm: (correctedKeyword, correctedObject) => {
+                runSearch(correctedKeyword, correctedObject, true);
+              },
+              onCancel: () => { w.setState('idle'); },
+            });
+          }
+          return;
+        }
+
+        if (resolved.category === 'single') {
+          const url = buildRecordUrl(instanceUrl, sfObject, resolved.record.Id); // eslint-disable-line no-undef
+          // Task は Name の代わりに Subject を使用
+          const displayName = resolved.record.Name || resolved.record.Subject || resolved.record.Id;
+          w.setState('success', { message: `「${displayName}」を開きます` });
+          setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
+        } else if (resolved.category === 'too_many') {
+          // 6件以上: 絞り込みを促す（遷移なし）
+          w.setState('error', { message: resolved.message });
+          setTimeout(() => w.setState('idle'), 4000);
+        } else {
+          // multiple (2〜5件): candidateList に候補を表示し音声番号選択を待つ
+          const cl = getCandidateList();
+          pendingCandidates = { records: resolved.candidates, sfObject, instanceUrl };
+          cl.show(resolved.candidates, (_idx, record) => {
+            // クリック選択
+            cl.hide();
+            pendingCandidates = null;
+            const url = buildRecordUrl(instanceUrl, sfObject, record.Id); // eslint-disable-line no-undef
+            const displayName = record.Name || record.Subject || record.Id;
+            w.setState('success', { message: `「${displayName}」を開きます` });
+            setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
+          });
+          w.setState('selecting', { message: resolved.message });
+        }
+      } catch (err) {
+        console.warn('[VF] search error:', err.message);
+        // トークンエラー（セッション切れ・未接続・期限切れ）はウィジェットで再接続を促す。
+        // ※ 検索ページへの遷移は行わない（SW 再起動後は session キーが消えており
+        //   トークン復号不能のため、遷移しても何も解決しない）
+        const isTokenErr = !err.message || err.message.includes('セッション') ||
+          err.message.includes('トークン') || err.message.includes('token') ||
+          err.message.includes('Receiving end') || err.message.includes('message channel') ||
+          err.message.includes('closed') || err.message.includes('unauthorized') ||
+          err.message.includes('INVALID_SESSION');
+        if (isTokenErr) {
+          w.setState('error', { message: 'ポップアップから再接続してください' });
+          setTimeout(() => w.setState('idle'), 4000);
+        } else {
+          w.setState('error', { message: err.message || '検索中にエラーが発生しました' });
+          setTimeout(() => w.setState('idle'), 3000);
+        }
+      }
+    });
+  };
 
   const toggleVoice = function() {
     const w = getWidget();
@@ -85,59 +196,28 @@ if (isSalesforceUrl) {
         } else if (intent && intent.action === 'search') {
           const keyword = intent.keyword;
           const sfObject = intent.object || 'Account';
-          w.setState('processing', { message: `「${keyword}」を検索中...` });
+          runSearch(keyword, sfObject);
 
-          chrome.storage.local.get(['instance_url'], async (storageResult) => {
-            const instanceUrl = storageResult.instance_url || window.location.origin;
-            try {
-              // アクセストークン取得
-              const token = await new Promise((tokenRes, tokenRej) => {
-                chrome.runtime.sendMessage({ type: 'GET_VALID_TOKEN' }, (r) => {
-                  if (chrome.runtime.lastError) {
-                    tokenRej(new Error(chrome.runtime.lastError.message));
-                    return;
-                  }
-                  if (r && r.success) { tokenRes(r.token); return; }
-                  tokenRej(new Error(r?.error || 'トークン取得に失敗しました'));
-                });
-              });
-
-              // SOSL 曖昧検索（法人格の漢字/ひらがな表記ゆれに対応）
-              const records = await soslFuzzy(instanceUrl, token, keyword, sfObject); // eslint-disable-line no-undef
-              const resolved = resolve(records); // eslint-disable-line no-undef
-
-              if (resolved.category === 'not_found') {
-                w.setState('success', { message: resolved.message });
-              } else if (resolved.category === 'single') {
-                const url = buildRecordUrl(instanceUrl, sfObject, resolved.record.Id); // eslint-disable-line no-undef
-                w.setState('success', { message: `「${resolved.record.Name}」を開きます` });
-                setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
-              } else {
-                // multiple / too_many → 検索ページへ遷移
-                w.setState('success', { message: resolved.message });
-                setTimeout(() => {
-                  chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_SEARCH', keyword }).catch(() => {});
-                }, 1000);
-              }
-            } catch (err) {
-              console.warn('[VF] search error:', err.message);
-              // トークンエラー（セッション切れ・未接続・期限切れ）はウィジェットで再接続を促す。
-              // ※ 検索ページへの遷移は行わない（SW 再起動後は session キーが消えており
-              //   トークン復号不能のため、遷移しても何も解決しない）
-              const isTokenErr = !err.message || err.message.includes('セッション') ||
-                err.message.includes('トークン') || err.message.includes('token') ||
-                err.message.includes('Receiving end') || err.message.includes('message channel') ||
-                err.message.includes('closed') || err.message.includes('unauthorized') ||
-                err.message.includes('INVALID_SESSION');
-              if (isTokenErr) {
-                w.setState('error', { message: 'ポップアップから再接続してください' });
-                setTimeout(() => w.setState('idle'), 4000);
-              } else {
-                w.setState('error', { message: err.message || '検索中にエラーが発生しました' });
-                setTimeout(() => w.setState('idle'), 3000);
-              }
+        } else if (intent && intent.action === 'select') {
+          // 候補リスト表示中の音声番号選択（「1番」「2」など）
+          if (pendingCandidates) {
+            const { records, sfObject: ps, instanceUrl: pi } = pendingCandidates;
+            const record = records[intent.index - 1];
+            if (record) {
+              const cl = getCandidateList();
+              cl.hide();
+              pendingCandidates = null;
+              const url = buildRecordUrl(pi, ps, record.Id); // eslint-disable-line no-undef
+              const displayName = record.Name || record.Subject || record.Id;
+              w.setState('success', { message: `「${displayName}」を開きます` });
+              setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
+            } else {
+              w.setState('error', { message: `1〜${records.length}番で選んでください` });
+              setTimeout(() => w.setState('idle'), 3000);
             }
-          });
+          } else {
+            w.setState('success', { message: `認識: ${transcript}` });
+          }
 
         } else {
           w.setState('success', { message: `認識: ${transcript}` });
@@ -157,7 +237,7 @@ if (isSalesforceUrl) {
     });
 
     speech.start();
-  }
+  };
 
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'TOGGLE_VOICE') {

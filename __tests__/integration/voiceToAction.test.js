@@ -3,6 +3,9 @@
 const { match }                            = require('../../lib/ruleEngine');
 const { buildListUrl, buildRecordUrl, navigateTo, goBack } = require('../../lib/navigator');
 const { resolve, RESULT_CATEGORY }         = require('../../lib/recordResolver');
+const { createWidget, STATES }             = require('../../ui/widget');
+const { createCandidateList }              = require('../../ui/candidateList');
+const { OBJECT_DISPLAY_FIELDS }            = require('../../lib/salesforceApi');
 
 const INSTANCE_URL = 'https://example.lightning.force.com';
 
@@ -124,6 +127,115 @@ describe('音声→アクション統合テスト', () => {
       expect(action).not.toBeNull();
       expect(action.action).toBe('select');
       expect(action.index).toBe(index);
+    });
+  });
+
+  // ── 0件・複数件 → ウィジェット内完結フロー ──────────────────────────────
+  describe('0件・複数件 → ウィジェット内完結フロー', () => {
+    let widget;
+    let cl;
+
+    beforeEach(() => {
+      const existing = document.getElementById('vfa-widget');
+      if (existing) existing.remove();
+      const existingCL = document.getElementById('vfa-candidate-list');
+      if (existingCL) existingCL.remove();
+      widget = createWidget();
+      cl = null;
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      widget.destroy();
+      if (cl) cl.destroy();
+      jest.useRealTimers();
+    });
+
+    test('0件 → resolve が not_found を返す', () => {
+      const resolved = resolve([]);
+      expect(resolved.category).toBe(RESULT_CATEGORY.NOT_FOUND);
+    });
+
+    test('0件（初回）→ editing 状態に遷移しキーワードが入力欄にセットされる', () => {
+      const keyword = 'たなか商事';
+      const resolved = resolve([]);
+      expect(resolved.category).toBe(RESULT_CATEGORY.NOT_FOUND);
+
+      // content.js の not_found 初回分岐をシミュレート
+      const onConfirm = jest.fn();
+      widget.setState(STATES.EDITING, { keyword, sfObject: 'Account', onConfirm, onCancel: jest.fn() });
+      expect(widget.getState()).toBe(STATES.EDITING);
+      const input = document.getElementById('vfa-widget').querySelector('.vfa-edit-input');
+      expect(input.value).toBe(keyword);
+    });
+
+    test('0件（初回）→ editing から Enter で onConfirm が呼ばれる', () => {
+      const keyword = 'たなか商事';
+      const onConfirm = jest.fn();
+      widget.setState(STATES.EDITING, { keyword, sfObject: 'Account', onConfirm, onCancel: jest.fn() });
+      const input = document.getElementById('vfa-widget').querySelector('.vfa-edit-input');
+      input.value = '田中商事';
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      expect(onConfirm).toHaveBeenCalledWith('田中商事', 'Account');
+    });
+
+    test('0件（再検索）→ success 状態に遷移し「検索不一致」が表示される', () => {
+      const keyword = '田中商事';
+      // isRetry=true の分岐をシミュレート
+      widget.setState(STATES.SUCCESS, { message: `検索不一致：「${keyword}」は見つかりませんでした` });
+      expect(widget.getState()).toBe(STATES.SUCCESS);
+      expect(document.getElementById('vfa-widget').querySelector('.vfa-message').textContent)
+        .toContain('検索不一致');
+    });
+
+    test('0件（再検索）→ 3秒後に idle へ自動遷移する', () => {
+      const keyword = '田中商事';
+      widget.setState(STATES.SUCCESS, { message: `検索不一致：「${keyword}」は見つかりませんでした` });
+      jest.advanceTimersByTime(3000);
+      expect(widget.getState()).toBe(STATES.IDLE);
+    });
+
+    test('2-5件 → selecting 状態に遷移し candidateList が表示される', () => {
+      const records = [
+        { Id: 'acc001', Name: 'ABC株式会社' },
+        { Id: 'acc002', Name: 'ABC商事' },
+      ];
+      const resolved = resolve(records);
+      expect(resolved.category).toBe(RESULT_CATEGORY.MULTIPLE);
+
+      cl = createCandidateList();
+      let selected = null;
+      cl.show(records, (_idx, record) => { selected = record; });
+
+      widget.setState(STATES.SELECTING, { message: resolved.message });
+      expect(widget.getState()).toBe(STATES.SELECTING);
+      expect(document.getElementById('vfa-candidate-list').style.display).toBe('block');
+
+      // 音声番号選択（「1番」）をシミュレート
+      const result = cl.selectByNumber(1);
+      expect(result).toBe(true);
+      expect(selected).toEqual(records[0]);
+    });
+
+    test('6件以上 → error 状態に遷移し絞り込みメッセージが表示される', () => {
+      const records = Array.from({ length: 7 }, (_, i) => ({ Id: `id${i}`, Name: `ABC${i}` }));
+      const resolved = resolve(records);
+      expect(resolved.category).toBe(RESULT_CATEGORY.TOO_MANY);
+
+      widget.setState(STATES.ERROR, { message: resolved.message });
+      expect(widget.getState()).toBe(STATES.ERROR);
+      expect(document.getElementById('vfa-widget').querySelector('.vfa-message').textContent)
+        .toContain('絞り込');
+    });
+
+    test('Task の OBJECT_DISPLAY_FIELDS に Subject が含まれ Name は含まれない', () => {
+      expect(OBJECT_DISPLAY_FIELDS).toBeDefined();
+      expect(OBJECT_DISPLAY_FIELDS['Task']).toContain('Subject');
+      expect(OBJECT_DISPLAY_FIELDS['Task']).not.toContain('Name');
+    });
+
+    test('Account の OBJECT_DISPLAY_FIELDS に Name が含まれる', () => {
+      expect(OBJECT_DISPLAY_FIELDS['Account']).toContain('Name');
     });
   });
 
