@@ -98,7 +98,7 @@ function createWidget() {
   const editCancelBtnEl = document.createElement('button');
   editCancelBtnEl.className = 'vfa-btn vfa-btn-cancel';
   editCancelBtnEl.setAttribute('type', 'button');
-  editCancelBtnEl.textContent = 'キャンセル';
+  editCancelBtnEl.textContent = '閉じる';
   editCancelBtnEl.style.display = 'none';
 
   container.appendChild(statusEl);
@@ -184,9 +184,9 @@ function createWidget() {
     }
 
     if (state === STATES.EDITING) {
-      statusEl.textContent = '見つかりません — 修正して再検索';
+      statusEl.textContent = '見つかりませんでした';
       transcriptEl.textContent = '';
-      messageEl.textContent = '';
+      messageEl.textContent = 'もう一度 Alt+V を押して言い直してください\n↓ または手動で修正 ↓';
       editInputEl.value = opts.keyword || '';
       editRowEl.style.display = 'flex';
       editCancelBtnEl.style.display = 'block';
@@ -230,11 +230,11 @@ function createWidget() {
         if (cancelCallback) cancelCallback();
       };
 
-      // 60秒タイムアウト
+      // 30秒タイムアウト
       editingTimeoutId = setTimeout(() => {
         setState(STATES.ERROR, { message: 'タイムアウトしました' });
         setTimeout(() => setState(STATES.IDLE), 3000);
-      }, 60000);
+      }, 30000);
 
       // オートフォーカス（カーソルを末尾に移動）
       editInputEl.focus();

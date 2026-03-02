@@ -419,15 +419,33 @@ describe('createWidget', () => {
       expect(onCancel).toHaveBeenCalled();
     });
 
-    test('60秒後 → ERROR → 3秒後 IDLE', () => {
+    test('30秒後 → ERROR → 3秒後 IDLE', () => {
       jest.useFakeTimers();
       widget.setState(STATES.EDITING, { keyword: 'テスト', sfObject: 'Account' });
       expect(widget.getState()).toBe(STATES.EDITING);
-      jest.advanceTimersByTime(60000);
+      jest.advanceTimersByTime(30000);
       expect(widget.getState()).toBe(STATES.ERROR);
       jest.advanceTimersByTime(3000);
       expect(widget.getState()).toBe(STATES.IDLE);
       jest.useRealTimers();
+    });
+
+    test('setState(editing) → ステータスが「見つかりませんでした」', () => {
+      widget.setState(STATES.EDITING, { keyword: 'テスト', sfObject: 'Account' });
+      const el = document.getElementById('vfa-widget');
+      expect(el.querySelector('.vfa-status').textContent).toBe('見つかりませんでした');
+    });
+
+    test('setState(editing) → メッセージに言い直しガイドが含まれる', () => {
+      widget.setState(STATES.EDITING, { keyword: 'テスト', sfObject: 'Account' });
+      const el = document.getElementById('vfa-widget');
+      expect(el.querySelector('.vfa-message').textContent).toContain('Alt+V');
+    });
+
+    test('setState(editing) → キャンセルボタンのラベルが「閉じる」', () => {
+      widget.setState(STATES.EDITING, { keyword: 'テスト', sfObject: 'Account' });
+      const el = document.getElementById('vfa-widget');
+      expect(el.querySelector('.vfa-btn-cancel').textContent).toBe('閉じる');
     });
 
     test('IDLE 遷移時に edit-row が非表示になる', () => {
