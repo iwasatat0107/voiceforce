@@ -87,7 +87,7 @@ voiceforce/
 │
 ├── lib/                       # コアロジック層
 │   ├── auth.js                #   OAuth + AES-256-GCM トークン暗号化
-│   ├── speechRecognition.js   #   Web Speech API ラッパー (Push-to-Talk)
+│   ├── speechRecognition.js   #   Web Speech API ラッパー (トグル音声入力)
 │   ├── ruleEngine.js          #   正規表現パターンマッチング
 │   ├── intentResolver.js      #   LLM レスポンスのホワイトリスト検証
 │   ├── salesforceApi.js       #   SOQL/SOSL 検索・CRUD 操作
