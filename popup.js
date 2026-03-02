@@ -10,6 +10,7 @@ const disconnectBtn = document.getElementById('disconnect-btn');
 const clientIdInput = document.getElementById('client-id-input');
 const clientSecretInput = document.getElementById('client-secret-input');
 const instanceUrlInput = document.getElementById('instance-url-input');
+const setupGuide = document.getElementById('setup-guide');
 
 function updateUI(isConnected, instanceUrl) {
   if (isConnected) {
@@ -19,12 +20,14 @@ function updateUI(isConnected, instanceUrl) {
     instanceUrlEl.style.display = instanceUrl ? 'block' : 'none';
     connectForm.style.display = 'none';
     disconnectSection.style.display = 'block';
+    setupGuide.style.display = 'none';
   } else {
     statusBadge.className = 'status-badge disconnected';
     statusText.textContent = '未接続';
     instanceUrlEl.style.display = 'none';
     connectForm.style.display = 'block';
     disconnectSection.style.display = 'none';
+    setupGuide.style.display = 'block';
   }
 }
 
@@ -84,4 +87,9 @@ chrome.commands.getAll((commands) => {
 // chrome://extensions/shortcuts を開いてカスタマイズ画面へ誘導
 document.getElementById('customize-shortcut-btn').addEventListener('click', () => {
   chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+});
+
+// セットアップガイドを GitHub で開く
+document.getElementById('open-guide-btn').addEventListener('click', () => {
+  chrome.tabs.create({ url: 'https://github.com/iwasatat0107/voiceforce/blob/main/docs/setup-guide.md' });
 });

@@ -156,10 +156,58 @@
     }
 
     .btn-secondary:hover { background: #f9fafb; }
+
+    .setup-guide {
+      margin-top: 16px;
+      padding: 12px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+    }
+
+    .setup-guide-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #1e40af;
+      margin: 0 0 8px;
+    }
+
+    .setup-guide ol {
+      margin: 0 0 10px;
+      padding-left: 18px;
+      font-size: 12px;
+      color: #374151;
+      line-height: 1.6;
+    }
+
+    .setup-guide li { margin-bottom: 4px; }
+
+    .setup-guide code {
+      font-family: monospace;
+      font-size: 11px;
+      background: #dbeafe;
+      padding: 1px 4px;
+      border-radius: 3px;
+      word-break: break-all;
+    }
+
+    .btn-guide {
+      width: 100%;
+      padding: 6px 12px;
+      border: 1px solid #93c5fd;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 500;
+      color: #1d4ed8;
+      cursor: pointer;
+    }
+
+    .btn-guide:hover { background: #eff6ff; opacity: 1; }
   </style>
 </head>
 <body>
-  <h1>🎤 Voice Assistant</h1>
+  <h1>🍤 Voice Assistant</h1>
 
   <div id="status-section">
     <div id="status-badge" class="status-badge disconnected">
@@ -167,6 +215,18 @@
       <span id="status-text">未接続</span>
     </div>
     <div id="instance-url" class="instance-url" style="display:none;"></div>
+  </div>
+
+  <div id="setup-guide" class="setup-guide">
+    <p class="setup-guide-title">初回セットアップ: Salesforce に Connected App の設定が必要です</p>
+    <ol>
+      <li>Salesforce Setup → App Manager → 「新規接続済みアプリケーション」</li>
+      <li>「OAuth 設定を有効化」をチェックし、コールバック URL に<br>
+        <code>https://login.salesforce.com/services/oauth2/callback</code> を入力</li>
+      <li>「コードフローの要件（PKCE）」を有効化</li>
+      <li>保存後に表示される「コンシューマーキー」と「コンシューマーシークレット」を下に入力</li>
+    </ol>
+    <button id="open-guide-btn" class="btn-guide">詳しいセットアップガイドを開く ↗</button>
   </div>
 
   <div id="connect-form" class="section">
