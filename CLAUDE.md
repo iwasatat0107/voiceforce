@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **VoiceForce**（Salesforce Voice Assistant）は、Salesforceをブラウザ上で音声操作する **Chrome拡張機能（Manifest V3）**。
 
-- `Ctrl+Shift+V`（Mac: `Cmd+Shift+V`）でPush-to-Talk音声入力を開始
+- `Alt+V`（Mac: `Option+V`）でトグル音声入力を開始（1回押すとリスニング開始、話し終わると自動停止）
 - 発話テキストを **二段階処理**（正規表現ルールエンジン → LLM意図解析）で解析
 - 解析結果をもとに **Salesforce REST API** へ直接OAuth通信でCRUD操作を実行
 - **Salesforceの顧客データは自前サーバーを一切経由しない**（発話テキストとメタデータのみ送信）
@@ -192,7 +192,7 @@ npm run package                     # Chrome Web Store用ZIP生成
 │
 ├── lib/                              # コアロジック（テスト対象：カバレッジ80%以上）
 │   ├── auth.js                       # OAuthフロー、AES-256暗号化、トークンリフレッシュ
-│   ├── speechRecognition.js          # Web Speech APIラッパー（Push-to-Talk、ja-JP）
+│   ├── speechRecognition.js          # Web Speech APIラッパー（トグル音声入力、ja-JP）
 │   ├── ruleEngine.js                 # QUICK_PATTERNSによる正規表現マッチング（LLMバイパス30-40%）
 │   ├── intentResolver.js             # LLMリクエスト・レスポンスのホワイトリスト検証
 │   ├── salesforceApi.js              # SOQL/SOSL検索、CRUD、エラーハンドリング
