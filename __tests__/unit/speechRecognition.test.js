@@ -184,6 +184,73 @@ describe('lib/speechRecognition.js', () => {
   });
 
   // ──────────────────────────────────────────
+  // 連続 start() / starting フラグ（エッジケース）
+  // ──────────────────────────────────────────
+  describe('starting フラグ（連続押し・競合防止）', () => {
+    test('start() 呼び出し直後（onstart 前）に再度 start() を呼んでも無視する', () => {
+      // onstart を即時発火しないモックに差し替え
+      const sr = createSpeechRecognition();
+      // mockInstance.start を上書きして onstart を発火しないようにする
+      mockInstance.start.mockImplementationOnce(() => {
+        // onstart を発火しない（実際のChromeと同じく非同期）
+      });
+
+      sr.start(); // starting = true になる（onstart はまだ発火していない）
+      sr.start(); // starting 中なので無視される
+      expect(mockInstance.start).toHaveBeenCalledTimes(1);
+    });
+
+    test('start() 呼び出し後 onstart 前は isListening() が true を返す', () => {
+      const sr = createSpeechRecognition();
+      mockInstance.start.mockImplementationOnce(() => {
+        // onstart を発火しない
+      });
+      sr.start();
+      expect(sr.isListening()).toBe(true); // starting 中も true
+    });
+
+    test('stop() は starting 中でも recognition.stop() を呼ぶ', () => {
+      const sr = createSpeechRecognition();
+      mockInstance.start.mockImplementationOnce(() => {
+        // onstart を発火しない
+      });
+      sr.start(); // starting = true
+      sr.stop();
+      expect(mockInstance.stop).toHaveBeenCalledTimes(1);
+    });
+
+    test('onerror で starting フラグがリセットされる', () => {
+      const sr = createSpeechRecognition();
+      mockInstance.start.mockImplementationOnce(() => {
+        // onstart を発火しない（starting のまま）
+        // すぐ onerror が来る（aborted ケース）
+        mockInstance.onerror({ error: 'aborted' });
+      });
+      sr.start();
+      expect(sr.isListening()).toBe(false); // starting がリセットされた
+      // 再度 start() できる
+      sr.start();
+      expect(mockInstance.start).toHaveBeenCalledTimes(2);
+    });
+
+    test('onend で starting フラグがリセットされる', () => {
+      const sr = createSpeechRecognition();
+      mockInstance.start.mockImplementationOnce(() => {
+        // onstart を発火しない
+        mockInstance.onend();
+      });
+      sr.start();
+      expect(sr.isListening()).toBe(false);
+    });
+
+    test('stop() が不要に呼ばれない（非listening 時）', () => {
+      const sr = createSpeechRecognition();
+      sr.stop(); // 未開始状態で stop() → recognition.stop() は呼ばれない
+      expect(mockInstance.stop).not.toHaveBeenCalled();
+    });
+  });
+
+  // ──────────────────────────────────────────
   // 無音タイムアウト
   // ──────────────────────────────────────────
   describe('無音タイムアウト', () => {
