@@ -4,14 +4,15 @@
 // XSS防止のため innerHTML は使用しない。テキストは textContent のみ使用。
 
 const STATES = {
-  IDLE:       'idle',
-  LISTENING:  'listening',
-  PROCESSING: 'processing',
-  EDITING:    'editing',
-  CONFIRM:    'confirm',
-  SUCCESS:    'success',
-  ERROR:      'error',
-  SELECTING:  'selecting', // candidateList 選択待ち（自動消滅なし）
+  IDLE:        'idle',
+  LISTENING:   'listening',
+  PROCESSING:  'processing',
+  EDITING:     'editing',
+  CONFIRM:     'confirm',
+  FIELD_INPUT: 'field-input', // レコード作成時の必須項目入力フォーム
+  SUCCESS:     'success',
+  ERROR:       'error',
+  SELECTING:   'selecting', // candidateList 選択待ち（自動消滅なし）
 };
 
 const DEFAULT_SUCCESS_DURATION_MS = 3000;
@@ -101,6 +102,21 @@ function createWidget() {
   editCancelBtnEl.textContent = '閉じる';
   editCancelBtnEl.style.display = 'none';
 
+  // field-input フォームコンテナ（レコード作成時の必須項目入力）
+  const fieldFormEl = document.createElement('div');
+  fieldFormEl.className = 'vfa-field-form';
+  fieldFormEl.style.display = 'none';
+
+  const fieldFormSubmitBtn = document.createElement('button');
+  fieldFormSubmitBtn.className = 'vfa-btn vfa-btn-field-submit';
+  fieldFormSubmitBtn.setAttribute('type', 'button');
+  fieldFormSubmitBtn.textContent = '確定';
+
+  const fieldFormCancelBtn = document.createElement('button');
+  fieldFormCancelBtn.className = 'vfa-btn vfa-btn-field-cancel';
+  fieldFormCancelBtn.setAttribute('type', 'button');
+  fieldFormCancelBtn.textContent = 'キャンセル';
+
   container.appendChild(statusEl);
   container.appendChild(transcriptEl);
   container.appendChild(messageEl);
@@ -108,6 +124,7 @@ function createWidget() {
   container.appendChild(editRowEl);
   container.appendChild(objectRowEl);
   container.appendChild(editCancelBtnEl);
+  container.appendChild(fieldFormEl);
 
   document.body.appendChild(container);
 
@@ -156,6 +173,9 @@ function createWidget() {
     editRowEl.style.display = 'none';
     objectRowEl.style.display = 'none';
     editCancelBtnEl.style.display = 'none';
+
+    // field-input フォームをリセット
+    fieldFormEl.style.display = 'none';
 
     if (state === STATES.IDLE) {
       container.style.display = 'none';
@@ -240,6 +260,60 @@ function createWidget() {
       editInputEl.focus();
       const len = editInputEl.value.length;
       editInputEl.setSelectionRange(len, len);
+      return;
+    }
+
+    if (state === STATES.FIELD_INPUT) {
+      statusEl.textContent = '入力が必要です';
+      messageEl.textContent = opts.message || '不足している情報を入力してください';
+
+      // 既存の入力欄をクリアして再構築（XSS防止: DOM API のみ使用）
+      while (fieldFormEl.firstChild) fieldFormEl.removeChild(fieldFormEl.firstChild);
+
+      const fieldDefs = opts.fields || [];
+      const inputRefs = {};
+
+      fieldDefs.forEach(({ label, key, value }) => {
+        const rowEl = document.createElement('div');
+        rowEl.className = 'vfa-field-row';
+
+        const labelEl = document.createElement('label');
+        labelEl.className = 'vfa-field-label';
+        labelEl.textContent = label;
+
+        const inputEl = document.createElement('input');
+        inputEl.type = 'text';
+        inputEl.className = 'vfa-field-input-item';
+        inputEl.value = (value !== undefined && value !== null) ? String(value) : '';
+        inputEl.setAttribute('data-key', key);
+        inputRefs[key] = inputEl;
+
+        rowEl.appendChild(labelEl);
+        rowEl.appendChild(inputEl);
+        fieldFormEl.appendChild(rowEl);
+      });
+
+      fieldFormEl.appendChild(fieldFormSubmitBtn);
+      fieldFormEl.appendChild(fieldFormCancelBtn);
+      fieldFormEl.style.display = 'block';
+
+      fieldFormSubmitBtn.onclick = () => {
+        const values = {};
+        fieldDefs.forEach(({ key }) => {
+          values[key] = inputRefs[key] ? inputRefs[key].value.trim() : '';
+        });
+        if (opts.onSubmit) opts.onSubmit(values);
+      };
+
+      fieldFormCancelBtn.onclick = () => {
+        if (opts.onCancel) opts.onCancel();
+      };
+
+      // オートフォーカス（最初のフィールド）
+      const firstKey = fieldDefs[0] && fieldDefs[0].key;
+      if (firstKey && inputRefs[firstKey]) {
+        inputRefs[firstKey].focus();
+      }
       return;
     }
 

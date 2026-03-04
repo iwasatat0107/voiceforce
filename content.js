@@ -17,6 +17,36 @@ if (isSalesforceUrl) {
   // デプロイ後は実際のURLに更新してください
   const WORKER_URL = 'https://voiceforce-worker.iwasatat0107.workers.dev';
 
+  // オブジェクト日本語ラベル
+  const SF_OBJECT_LABELS = {
+    'Account':     '取引先',
+    'Contact':     '取引先責任者',
+    'Lead':        'リード',
+    'Opportunity': '商談',
+    'Task':        'ToDo',
+  };
+
+  // フィールド日本語ラベル（代表的な標準フィールド）
+  const SF_FIELD_LABELS = {
+    'Name':         '取引先名',
+    'Phone':        '電話番号',
+    'Industry':     '業種',
+    'BillingState': '都道府県',
+    'FirstName':    '名',
+    'LastName':     '姓',
+    'Email':        'メールアドレス',
+    'Company':      '会社名',
+    'StageName':    'フェーズ',
+    'CloseDate':    '完了予定日',
+    'Amount':       '金額',
+    'Subject':      'タイトル',
+    'Status':       'ステータス',
+    'ActivityDate': '期日',
+    'AccountId':    '取引先',
+    'WhoId':        '関連する人',
+    'WhatId':       '関連するレコード',
+  };
+
   // 検索対象オブジェクトごとの取得フィールド（Task は Name の代わりに Subject を使用）
   const OBJECT_DISPLAY_FIELDS = {
     'Account':     ['Id', 'Name'],
@@ -152,6 +182,123 @@ if (isSalesforceUrl) {
         }
       }
     });
+  };
+
+  // アクセストークン取得ヘルパー
+  const getToken = function() {
+    return new Promise((tokenRes, tokenRej) => {
+      chrome.runtime.sendMessage({ type: 'GET_VALID_TOKEN' }, (r) => {
+        if (chrome.runtime.lastError) {
+          tokenRej(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        if (r && r.success) { tokenRes(r.token); return; }
+        tokenRej(new Error(r?.error || 'トークン取得に失敗しました'));
+      });
+    });
+  };
+
+  // トークンエラー判定・ウィジェット表示ヘルパー
+  const handleApiError = function(err) {
+    const w = getWidget();
+    const isTokenErr = !err.message ||
+      err.message.includes('セッション') || err.message.includes('トークン') ||
+      err.message.includes('token') || err.message.includes('Receiving end') ||
+      err.message.includes('message channel') || err.message.includes('closed') ||
+      err.message.includes('unauthorized') || err.message.includes('INVALID_SESSION');
+    if (isTokenErr) {
+      w.setState('error', { message: '接続が切れました\n① ツールバーの 🍤 をクリック\n② 「接続を解除」→「Salesforceに接続」' });
+      setTimeout(() => w.setState('idle'), 6000);
+    } else {
+      w.setState('error', { message: err.message || 'エラーが発生しました' });
+      setTimeout(() => w.setState('idle'), 3000);
+    }
+  };
+
+  // レコード作成実行（API コール → 成功なら作成レコードに遷移）
+  const executeCreate = function(sfObject, fields) {
+    const w = getWidget();
+    w.setState('processing', { message: '作成中...' });
+    chrome.storage.local.get(['instance_url'], async (result) => {
+      const instanceUrl = result.instance_url || window.location.origin;
+      try {
+        const token = await getToken();
+        const sfResult = await createRecord(instanceUrl, token, sfObject, fields); // eslint-disable-line no-undef
+        const url = buildRecordUrl(instanceUrl, sfObject, sfResult.id); // eslint-disable-line no-undef
+        const label = SF_OBJECT_LABELS[sfObject] || sfObject;
+        w.setState('success', { message: `${label}を作成しました` });
+        setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
+      } catch (err) {
+        console.warn('[VF] createRecord error:', err.message, err.sfErrorCode);
+        if (err.sfErrorCode === 'REQUIRED_FIELD_MISSING') {
+          w.setState('error', { message: `必須項目が不足しています\n${err.message || ''}` });
+          setTimeout(() => w.setState('idle'), 5000);
+        } else if (err.sfErrorCode === 'DUPLICATES_DETECTED') {
+          w.setState('confirm', {
+            message: '似たレコードがすでに存在します\nそれでも作成しますか？',
+            onConfirm: (confirmed) => {
+              if (!confirmed) { w.setState('idle'); return; }
+              executeCreate(sfObject, Object.assign({}, fields, { AllowSave: true }));
+            },
+          });
+        } else if (err.sfErrorCode === 'FIELD_CUSTOM_VALIDATION_EXCEPTION') {
+          w.setState('error', { message: `入力規則エラー:\n${err.message}` });
+          setTimeout(() => w.setState('idle'), 5000);
+        } else {
+          handleApiError(err);
+        }
+      }
+    });
+  };
+
+  // 確認画面を表示してから作成実行
+  const showCreateConfirm = function(sfObject, fields) {
+    const w = getWidget();
+    const label = SF_OBJECT_LABELS[sfObject] || sfObject;
+    const fieldSummary = Object.entries(fields)
+      .map(([k, v]) => `${SF_FIELD_LABELS[k] || k}: ${v}`)
+      .join('\n');
+    w.setState('confirm', {
+      message: `${label}を作成します\n─────\n${fieldSummary}\n─────\n「はい」で確定`,
+      onConfirm: (confirmed) => {
+        if (!confirmed) { w.setState('idle'); return; }
+        executeCreate(sfObject, fields);
+      },
+    });
+  };
+
+  // LLM create アクション処理
+  const handleCreate = function(llmIntent) {
+    const w = getWidget();
+    const sfObject = llmIntent.object;
+    if (!sfObject) {
+      w.setState('error', { message: '作成するオブジェクトが認識できませんでした\n「ヘルプ」と言うと使い方を確認できます' });
+      setTimeout(() => w.setState('idle'), 4000);
+      return;
+    }
+
+    const fields = llmIntent.fields || {};
+    const missingFields = llmIntent.missing_fields || [];
+
+    if (missingFields.length > 0) {
+      const label = SF_OBJECT_LABELS[sfObject] || sfObject;
+      w.setState('field-input', {
+        message: `${label}に必要な情報を入力してください`,
+        fields: missingFields.map((key) => ({
+          label: SF_FIELD_LABELS[key] || key,
+          key,
+          value: fields[key] || '',
+        })),
+        onSubmit: (values) => {
+          const allFields = Object.assign({}, fields);
+          Object.entries(values).forEach(([k, v]) => { if (v) allFields[k] = v; });
+          showCreateConfirm(sfObject, allFields);
+        },
+        onCancel: () => { w.setState('idle'); },
+      });
+    } else {
+      showCreateConfirm(sfObject, fields);
+    }
   };
 
   const SPEECH_ERROR_MESSAGES = {
@@ -316,8 +463,10 @@ if (isSalesforceUrl) {
                     `「${transcript}」は認識できませんでした\n「ヘルプ」と言うと使い方を確認できます`,
                 });
                 setTimeout(() => w.setState('idle'), 4000);
+              } else if (llmIntent.action === 'create') {
+                handleCreate(llmIntent);
               } else {
-                // create / update / summary → 近日対応予定
+                // update / summary → 近日対応予定
                 w.setState('error', {
                   message: 'この機能は近日対応予定です\n「ヘルプ」と言うと使い方を確認できます',
                 });
