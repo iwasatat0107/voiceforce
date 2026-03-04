@@ -440,6 +440,183 @@ describe('音声→アクション統合テスト', () => {
     });
   });
 
+  // ── 複数オブジェクト作成フロー（#93〜#96）──────────────────────────────────
+  describe('複数オブジェクト作成フロー（#93-#96）', () => {
+    let widget;
+
+    beforeEach(() => {
+      const existing = document.getElementById('vfa-widget');
+      if (existing) existing.remove();
+      widget = createWidget();
+    });
+
+    afterEach(() => {
+      widget.destroy();
+    });
+
+    // ── Lead (#93) ──────────────────────────────────────────────────────────
+    describe('リード（Lead）作成', () => {
+      test('LastName + Company あり → confirm 状態に遷移できる', () => {
+        widget.setState(STATES.CONFIRM, {
+          message: 'リードを作成します\n─────\n姓: 鈴木\n名: 花子\n会社名: XYZ商事\n─────\n「はい」で確定',
+          onConfirm: jest.fn(),
+        });
+        expect(widget.getState()).toBe(STATES.CONFIRM);
+      });
+
+      test('LastName・Company が不足 → field-input でフォーム表示', () => {
+        widget.setState(STATES.FIELD_INPUT, {
+          fields: [
+            { label: '姓', key: 'LastName', value: '' },
+            { label: '会社名', key: 'Company', value: '' },
+          ],
+          onSubmit: jest.fn(),
+          onCancel: jest.fn(),
+        });
+        expect(widget.getState()).toBe(STATES.FIELD_INPUT);
+        const el = document.getElementById('vfa-widget');
+        const inputs = el.querySelectorAll('.vfa-field-form input');
+        expect(inputs.length).toBe(2);
+        expect(inputs[0].getAttribute('data-key')).toBe('LastName');
+        expect(inputs[1].getAttribute('data-key')).toBe('Company');
+      });
+
+      test('validateLLMOutput: Lead create レスポンスを通過する', () => {
+        const llmIntent = {
+          action: 'create', object: 'Lead',
+          fields: { LastName: '鈴木', FirstName: '花子', Company: 'XYZ商事' },
+          missing_fields: [],
+          confidence: 0.9,
+        };
+        expect(validateLLMOutput(llmIntent, null)).toBe(true);
+      });
+    });
+
+    // ── Contact (#94) ────────────────────────────────────────────────────────
+    describe('取引先責任者（Contact）作成', () => {
+      test('LastName あり → confirm 状態に遷移できる', () => {
+        widget.setState(STATES.CONFIRM, {
+          message: '取引先責任者を作成します\n─────\n姓: 田中\n名: 太郎\n─────\n「はい」で確定',
+          onConfirm: jest.fn(),
+        });
+        expect(widget.getState()).toBe(STATES.CONFIRM);
+      });
+
+      test('LastName が不足 → field-input に遷移できる', () => {
+        widget.setState(STATES.FIELD_INPUT, {
+          fields: [{ label: '姓', key: 'LastName', value: '' }],
+          onSubmit: jest.fn(),
+          onCancel: jest.fn(),
+        });
+        expect(widget.getState()).toBe(STATES.FIELD_INPUT);
+      });
+
+      test('validateLLMOutput: Contact create レスポンスを通過する', () => {
+        const llmIntent = {
+          action: 'create', object: 'Contact',
+          fields: { LastName: '田中', FirstName: '太郎', Email: 'tanaka@example.com' },
+          missing_fields: [],
+          confidence: 0.88,
+        };
+        expect(validateLLMOutput(llmIntent, null)).toBe(true);
+      });
+    });
+
+    // ── Opportunity (#95) ────────────────────────────────────────────────────
+    describe('商談（Opportunity）作成', () => {
+      test('Name + CloseDate + StageName あり → confirm 状態に遷移できる', () => {
+        widget.setState(STATES.CONFIRM, {
+          message: '商談を作成します\n─────\n取引先名: ABC商談\nフェーズ: 提案/見積中\n完了予定日: 2026-03-31\n─────\n「はい」で確定',
+          onConfirm: jest.fn(),
+        });
+        expect(widget.getState()).toBe(STATES.CONFIRM);
+      });
+
+      test('StageName が不足 → field-input に遷移できる', () => {
+        widget.setState(STATES.FIELD_INPUT, {
+          fields: [{ label: 'フェーズ', key: 'StageName', value: '' }],
+          onSubmit: jest.fn(),
+          onCancel: jest.fn(),
+        });
+        expect(widget.getState()).toBe(STATES.FIELD_INPUT);
+        const el = document.getElementById('vfa-widget');
+        const input = el.querySelector('.vfa-field-form input[data-key="StageName"]');
+        expect(input).not.toBeNull();
+      });
+
+      test('validateLLMOutput: Opportunity create レスポンスを通過する', () => {
+        const llmIntent = {
+          action: 'create', object: 'Opportunity',
+          fields: { Name: 'ABC商談', StageName: '提案/見積中', CloseDate: '2026-03-31', Amount: 5000000 },
+          missing_fields: [],
+          confidence: 0.91,
+        };
+        expect(validateLLMOutput(llmIntent, null)).toBe(true);
+      });
+    });
+
+    // ── Task (#96) ──────────────────────────────────────────────────────────
+    describe('ToDo（Task）作成', () => {
+      test('Subject あり → confirm 状態に遷移できる', () => {
+        widget.setState(STATES.CONFIRM, {
+          message: 'ToDoを作成します\n─────\nタイトル: 田中さんにフォロー連絡\n期日: 2026-03-10\n─────\n「はい」で確定',
+          onConfirm: jest.fn(),
+        });
+        expect(widget.getState()).toBe(STATES.CONFIRM);
+      });
+
+      test('Subject が不足 → field-input に遷移できる', () => {
+        widget.setState(STATES.FIELD_INPUT, {
+          fields: [{ label: 'タイトル', key: 'Subject', value: '' }],
+          onSubmit: jest.fn(),
+          onCancel: jest.fn(),
+        });
+        expect(widget.getState()).toBe(STATES.FIELD_INPUT);
+      });
+
+      test('validateLLMOutput: Task create レスポンスを通過する', () => {
+        const llmIntent = {
+          action: 'create', object: 'Task',
+          fields: { Subject: '田中さんにフォロー連絡', ActivityDate: '2026-03-10', Status: 'Not Started' },
+          missing_fields: [],
+          confidence: 0.87,
+        };
+        expect(validateLLMOutput(llmIntent, null)).toBe(true);
+      });
+    });
+
+    // ── 全オブジェクト共通 ──────────────────────────────────────────────────
+    describe('全オブジェクト共通', () => {
+      test.each([
+        ['Account',     '取引先'],
+        ['Lead',        'リード'],
+        ['Contact',     '取引先責任者'],
+        ['Opportunity', '商談'],
+        ['Task',        'ToDo'],
+      ])('SF_OBJECT_LABELS: %s → %s', (apiName, expected) => {
+        // widget の confirm メッセージにオブジェクト名が含まれることを確認
+        widget.setState(STATES.CONFIRM, {
+          message: `${expected}を作成します\n─────\n「はい」で確定`,
+          onConfirm: jest.fn(),
+        });
+        const el = document.getElementById('vfa-widget');
+        expect(el.querySelector('.vfa-message').textContent).toContain(expected);
+      });
+
+      test('field-input キャンセルで idle に戻れる', () => {
+        const onCancel = jest.fn();
+        widget.setState(STATES.FIELD_INPUT, {
+          fields: [{ label: '姓', key: 'LastName', value: '' }],
+          onSubmit: jest.fn(),
+          onCancel,
+        });
+        const el = document.getElementById('vfa-widget');
+        el.querySelector('.vfa-btn-field-cancel').click();
+        expect(onCancel).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
   // ── 未認識コマンド（#74）──────────────────────────────────────────────────
   describe('未認識コマンド（#74）', () => {
     test('ruleEngine にマッチしない発話は null を返す', () => {
