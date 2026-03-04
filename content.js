@@ -11,6 +11,7 @@ if (isSalesforceUrl) {
   let keepaliveTimer = null;
   let candidateList = null;
   let pendingCandidates = null; // { records, sfObject, instanceUrl }
+  let toggleCooldown = false;   // 連続押し防止（500ms デバウンス）
 
   // 検索対象オブジェクトごとの取得フィールド（Task は Name の代わりに Subject を使用）
   const OBJECT_DISPLAY_FIELDS = {
@@ -149,7 +150,19 @@ if (isSalesforceUrl) {
     });
   };
 
+  const SPEECH_ERROR_MESSAGES = {
+    'not-allowed':         'マイクのアクセスを許可してください',
+    'audio-capture':       'マイクが使用できません',
+    'network':             'ネットワークエラーが発生しました',
+    'service-not-allowed': '音声認識サービスが利用できません',
+  };
+
   const toggleVoice = function() {
+    // 連続押し・キーリピートを無視（500ms デバウンス）
+    if (toggleCooldown) return;
+    toggleCooldown = true;
+    setTimeout(() => { toggleCooldown = false; }, 500);
+
     const w = getWidget();
     if (!w) return;
 
@@ -159,6 +172,16 @@ if (isSalesforceUrl) {
       if (speech) speech.stop();
       w.setState('idle');
       return;
+    }
+
+    // 処理中は割り込みしない
+    if (state === 'processing') return;
+
+    // 候補選択中にトグルされたら候補リストをクリアして再スタート
+    if (state === 'selecting') {
+      const cl = getCandidateList();
+      if (cl) cl.hide();
+      pendingCandidates = null;
     }
 
     w.setState('listening');
@@ -252,7 +275,13 @@ if (isSalesforceUrl) {
       },
       onError: (err) => {
         stopKeepalive();
-        w.setState('error', { message: err });
+        // aborted / no-speech はユーザー操作や無音によるもので正常終了扱い
+        if (err === 'aborted' || err === 'no-speech') {
+          if (w.getState() !== 'idle') w.setState('idle');
+          return;
+        }
+        const msg = SPEECH_ERROR_MESSAGES[err] || '音声認識エラーが発生しました';
+        w.setState('error', { message: msg });
         setTimeout(() => w.setState('idle'), 3000);
       },
       onEnd: () => {
