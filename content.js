@@ -139,8 +139,8 @@ if (isSalesforceUrl) {
           err.message.includes('closed') || err.message.includes('unauthorized') ||
           err.message.includes('INVALID_SESSION');
         if (isTokenErr) {
-          w.setState('error', { message: 'ポップアップから再接続してください' });
-          setTimeout(() => w.setState('idle'), 4000);
+          w.setState('error', { message: '接続が切れました\n① ツールバーの 🍤 をクリック\n② 「接続を解除」→「Salesforceに接続」' });
+          setTimeout(() => w.setState('idle'), 6000);
         } else {
           w.setState('error', { message: err.message || '検索中にエラーが発生しました' });
           setTimeout(() => w.setState('idle'), 3000);
