@@ -30,6 +30,7 @@
         "lib/speechRecognition.js",
         "lib/salesforceApi.js",
         "lib/recordResolver.js",
+        "lib/intentResolver.js",
         "ui/widget.js",
         "ui/candidateList.js",
         "content.js"

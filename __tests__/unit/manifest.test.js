@@ -90,6 +90,7 @@ describe('manifest.json', () => {
       'lib/speechRecognition.js':  'createSpeechRecognition()',
       'lib/salesforceApi.js':      'soslFuzzy()',
       'lib/recordResolver.js':     'resolve()',
+      'lib/intentResolver.js':     'resolveIntent() / validateLLMOutput()',
       'ui/widget.js':              'createWidget()',
       'ui/candidateList.js':       'createCandidateList()',
     };

@@ -13,6 +13,10 @@ if (isSalesforceUrl) {
   let pendingCandidates = null; // { records, sfObject, instanceUrl }
   let toggleCooldown = false;   // 連続押し防止（500ms デバウンス）
 
+  // Cloudflare Worker URL（LLM フォールバック用）
+  // デプロイ後は実際のURLに更新してください
+  const WORKER_URL = 'https://voiceforce-worker.iwasatat0107.workers.dev';
+
   // 検索対象オブジェクトごとの取得フィールド（Task は Name の代わりに Subject を使用）
   const OBJECT_DISPLAY_FIELDS = {
     'Account':     ['Id', 'Name'],
@@ -266,11 +270,76 @@ if (isSalesforceUrl) {
           }
 
         } else {
-          // ruleEngine にマッチしないコマンド → ユーザーに使い方を案内
-          w.setState('error', {
-            message: `「${transcript}」は未対応のコマンドです\n「ヘルプ」と言うと使い方を確認できます`,
-          });
-          setTimeout(() => w.setState('idle'), 4000);
+          // ruleEngine にマッチしない → LLM（intentResolver）にフォールバック
+          w.setState('processing', { message: 'AI解析中...' });
+          const userId = chrome.runtime.id;
+          const llmTimeout = new Promise((_, reject) =>
+            setTimeout(() => {
+              const e = new Error('timeout');
+              e.isTimeout = true;
+              reject(e);
+            }, 10000)
+          );
+          Promise.race([
+            resolveIntent(transcript, '', WORKER_URL, userId), // eslint-disable-line no-undef
+            llmTimeout,
+          ])
+            .then((llmIntent) => {
+              if (!validateLLMOutput(llmIntent, null)) { // eslint-disable-line no-undef
+                w.setState('error', {
+                  message: '解析に失敗しました\n「ヘルプ」と言うと使い方を確認できます',
+                });
+                setTimeout(() => w.setState('idle'), 4000);
+                return;
+              }
+              if (llmIntent.action === 'navigate' && llmIntent.target === 'list') {
+                chrome.storage.local.get(['instance_url'], (result) => {
+                  const instanceUrl = result.instance_url || window.location.origin;
+                  const url = buildListUrl(instanceUrl, llmIntent.object, llmIntent.filterName); // eslint-disable-line no-undef
+                  w.setState('success', { message: llmIntent.message || '一覧を開きます' });
+                  setTimeout(() => navigateTo(url), 1000); // eslint-disable-line no-undef
+                });
+              } else if (llmIntent.action === 'search') {
+                const keyword = llmIntent.search_term || llmIntent.keyword;
+                const sfObject = llmIntent.object || 'Account';
+                if (keyword) {
+                  runSearch(keyword, sfObject);
+                } else {
+                  w.setState('error', {
+                    message: '検索キーワードが認識できませんでした\nもう一度お試しください',
+                  });
+                  setTimeout(() => w.setState('idle'), 3000);
+                }
+              } else if (llmIntent.action === 'unknown' || llmIntent.confidence < 0.5) {
+                w.setState('error', {
+                  message: llmIntent.message ||
+                    `「${transcript}」は認識できませんでした\n「ヘルプ」と言うと使い方を確認できます`,
+                });
+                setTimeout(() => w.setState('idle'), 4000);
+              } else {
+                // create / update / summary → 近日対応予定
+                w.setState('error', {
+                  message: 'この機能は近日対応予定です\n「ヘルプ」と言うと使い方を確認できます',
+                });
+                setTimeout(() => w.setState('idle'), 4000);
+              }
+            })
+            .catch((err) => {
+              if (err.isTimeout) {
+                w.setState('error', {
+                  message: '応答に時間がかかっています\nもう一度お試しください',
+                });
+              } else if (err.status === 429) {
+                w.setState('error', {
+                  message: '本日の音声解析の利用上限（10回）に達しました',
+                });
+              } else {
+                w.setState('error', {
+                  message: '解析に失敗しました\n「ヘルプ」と言うと使い方を確認できます',
+                });
+              }
+              setTimeout(() => w.setState('idle'), 4000);
+            });
         }
       },
       onError: (err) => {
