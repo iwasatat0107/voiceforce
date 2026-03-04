@@ -585,5 +585,119 @@ describe('createWidget', () => {
       const el = document.getElementById('vfa-widget');
       expect(el.querySelector('.vfa-confirm').style.display).toBe('none');
     });
+
+    test('processing → field-input へ遷移できる', () => {
+      widget.setState(STATES.PROCESSING);
+      widget.setState(STATES.FIELD_INPUT, {
+        fields: [{ label: '取引先名', key: 'Name', value: '' }],
+        onSubmit: jest.fn(),
+      });
+      expect(widget.getState()).toBe(STATES.FIELD_INPUT);
+    });
+
+    test('field-input → confirm へ遷移できる', () => {
+      widget.setState(STATES.FIELD_INPUT, {
+        fields: [{ label: '取引先名', key: 'Name', value: '' }],
+        onSubmit: jest.fn(),
+      });
+      widget.setState(STATES.CONFIRM, { message: '作成しますか？', onConfirm: jest.fn() });
+      expect(widget.getState()).toBe(STATES.CONFIRM);
+    });
+  });
+
+  // ──────────────────────────────────────
+  // field-input 状態（#92 レコード作成）
+  // ──────────────────────────────────────
+  describe('field-input 状態', () => {
+    const fields = [
+      { label: '取引先名', key: 'Name', value: '' },
+      { label: '電話番号', key: 'Phone', value: '03-1234-5678' },
+    ];
+    let onSubmit;
+    let onCancel;
+
+    beforeEach(() => {
+      onSubmit = jest.fn();
+      onCancel = jest.fn();
+      widget.setState(STATES.FIELD_INPUT, { fields, onSubmit, onCancel });
+    });
+
+    test('STATES.FIELD_INPUT が定義されている', () => {
+      expect(STATES.FIELD_INPUT).toBe('field-input');
+    });
+
+    test('getState() は field-input を返す', () => {
+      expect(widget.getState()).toBe(STATES.FIELD_INPUT);
+    });
+
+    test('ウィジェットが表示される', () => {
+      const el = document.getElementById('vfa-widget');
+      expect(el.style.display).toBe('block');
+    });
+
+    test('フィールド数分の input 要素が生成される', () => {
+      const el = document.getElementById('vfa-widget');
+      const inputs = el.querySelectorAll('.vfa-field-form input');
+      expect(inputs.length).toBe(fields.length);
+    });
+
+    test('各 input に data-key と初期値がセットされる', () => {
+      const el = document.getElementById('vfa-widget');
+      const inputs = el.querySelectorAll('.vfa-field-form input');
+      expect(inputs[0].getAttribute('data-key')).toBe('Name');
+      expect(inputs[0].value).toBe('');
+      expect(inputs[1].getAttribute('data-key')).toBe('Phone');
+      expect(inputs[1].value).toBe('03-1234-5678');
+    });
+
+    test('確定ボタンをクリックすると onSubmit が各フィールドの値で呼ばれる', () => {
+      const el = document.getElementById('vfa-widget');
+      const inputs = el.querySelectorAll('.vfa-field-form input');
+      inputs[0].value = 'ABC株式会社';
+      inputs[1].value = '03-9999-0000';
+      el.querySelector('.vfa-btn-field-submit').click();
+      expect(onSubmit).toHaveBeenCalledWith({ Name: 'ABC株式会社', Phone: '03-9999-0000' });
+    });
+
+    test('キャンセルボタンをクリックすると onCancel が呼ばれる', () => {
+      const el = document.getElementById('vfa-widget');
+      el.querySelector('.vfa-btn-field-cancel').click();
+      expect(onCancel).toHaveBeenCalledTimes(1);
+    });
+
+    test('idle へ遷移すると field-form が非表示になる', () => {
+      widget.setState(STATES.IDLE);
+      const el = document.getElementById('vfa-widget');
+      expect(el.querySelector('.vfa-field-form').style.display).toBe('none');
+    });
+
+    test('onSubmit なしでも確定クリックしてもエラーにならない', () => {
+      widget.setState(STATES.FIELD_INPUT, {
+        fields: [{ label: '名前', key: 'Name', value: '' }],
+      });
+      const el = document.getElementById('vfa-widget');
+      expect(() => el.querySelector('.vfa-btn-field-submit').click()).not.toThrow();
+    });
+
+    test('空文字の値は onSubmit に渡されない（フィルタなし: 値をそのまま渡す）', () => {
+      const el = document.getElementById('vfa-widget');
+      const inputs = el.querySelectorAll('.vfa-field-form input');
+      inputs[0].value = 'ABC株式会社';
+      inputs[1].value = ''; // 空のまま
+      el.querySelector('.vfa-btn-field-submit').click();
+      expect(onSubmit).toHaveBeenCalledWith({ Name: 'ABC株式会社', Phone: '' });
+    });
+
+    test('再度 field-input 状態にすると前の input がクリアされ新しい input に置き換わる', () => {
+      widget.setState(STATES.FIELD_INPUT, {
+        fields: [{ label: '新しいフィールド', key: 'NewField', value: '初期値' }],
+        onSubmit: jest.fn(),
+      });
+      const el = document.getElementById('vfa-widget');
+      const inputs = el.querySelectorAll('.vfa-field-form input');
+      expect(inputs.length).toBe(1);
+      expect(inputs[0].getAttribute('data-key')).toBe('NewField');
+      expect(inputs[0].value).toBe('初期値');
+    });
   });
 });

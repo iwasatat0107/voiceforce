@@ -362,6 +362,84 @@ describe('音声→アクション統合テスト', () => {
     });
   });
 
+  // ── レコード作成フロー（#92）──────────────────────────────────────────────
+  describe('レコード作成フロー（#92）', () => {
+    let widget;
+
+    beforeEach(() => {
+      const existing = document.getElementById('vfa-widget');
+      if (existing) existing.remove();
+      widget = createWidget();
+    });
+
+    afterEach(() => {
+      widget.destroy();
+    });
+
+    test('STATES.FIELD_INPUT が定義されている', () => {
+      expect(STATES.FIELD_INPUT).toBe('field-input');
+    });
+
+    test('LLM create レスポンス（Name あり）→ confirm 状態に遷移できる', () => {
+      const llmIntent = { action: 'create', object: 'Account', fields: { Name: 'ABC株式会社' }, missing_fields: [], confidence: 0.9 };
+      // missing_fields が空のとき → confirm 状態へ
+      widget.setState(STATES.CONFIRM, {
+        message: `取引先を作成します\n─────\n取引先名: ${llmIntent.fields.Name}\n─────\n「はい」で確定`,
+        onConfirm: jest.fn(),
+      });
+      expect(widget.getState()).toBe(STATES.CONFIRM);
+    });
+
+    test('LLM create レスポンス（Name なし）→ field-input 状態に遷移できる', () => {
+      const llmIntent = { action: 'create', object: 'Account', fields: {}, missing_fields: ['Name'], confidence: 0.8 };
+      widget.setState(STATES.FIELD_INPUT, {
+        fields: llmIntent.missing_fields.map(key => ({ label: key === 'Name' ? '取引先名' : key, key, value: '' })),
+        onSubmit: jest.fn(),
+        onCancel: jest.fn(),
+      });
+      expect(widget.getState()).toBe(STATES.FIELD_INPUT);
+      const el = document.getElementById('vfa-widget');
+      const inputs = el.querySelectorAll('.vfa-field-form input');
+      expect(inputs.length).toBe(1);
+      expect(inputs[0].getAttribute('data-key')).toBe('Name');
+    });
+
+    test('field-input で値を入力して確定 → onSubmit が呼ばれる', () => {
+      const onSubmit = jest.fn();
+      widget.setState(STATES.FIELD_INPUT, {
+        fields: [{ label: '取引先名', key: 'Name', value: '' }],
+        onSubmit,
+        onCancel: jest.fn(),
+      });
+      const el = document.getElementById('vfa-widget');
+      const input = el.querySelector('.vfa-field-form input[data-key="Name"]');
+      input.value = 'テスト株式会社';
+      el.querySelector('.vfa-btn-field-submit').click();
+      expect(onSubmit).toHaveBeenCalledWith({ Name: 'テスト株式会社' });
+    });
+
+    test('confirm の「はい」クリックで onConfirm(true) が呼ばれる', () => {
+      const onConfirm = jest.fn();
+      widget.setState(STATES.CONFIRM, { message: '取引先を作成します', onConfirm });
+      const el = document.getElementById('vfa-widget');
+      el.querySelector('.vfa-btn-yes').click();
+      expect(onConfirm).toHaveBeenCalledWith(true);
+    });
+
+    test('confirm の「いいえ」クリックで onConfirm(false) が呼ばれる', () => {
+      const onConfirm = jest.fn();
+      widget.setState(STATES.CONFIRM, { message: '取引先を作成します', onConfirm });
+      const el = document.getElementById('vfa-widget');
+      el.querySelector('.vfa-btn-no').click();
+      expect(onConfirm).toHaveBeenCalledWith(false);
+    });
+
+    test('validateLLMOutput: create レスポンス（object あり）はホワイトリストを通過する', () => {
+      const llmIntent = { action: 'create', object: 'Account', fields: { Name: 'ABC' }, missing_fields: [], confidence: 0.9 };
+      expect(validateLLMOutput(llmIntent, null)).toBe(true);
+    });
+  });
+
   // ── 未認識コマンド（#74）──────────────────────────────────────────────────
   describe('未認識コマンド（#74）', () => {
     test('ruleEngine にマッチしない発話は null を返す', () => {
