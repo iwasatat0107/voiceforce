@@ -9,115 +9,49 @@ describe('lib/auth.js', () => {
   });
 
   // ──────────────────────────────────────────
-  // generateEncryptionKey
+  // saveTokens
   // ──────────────────────────────────────────
-  describe('generateEncryptionKey', () => {
-    test('AES-256-GCM 鍵を生成する', async () => {
-      const key = await auth.generateEncryptionKey();
-      expect(key).toBeDefined();
-      expect(key.type).toBe('secret');
-      expect(key.algorithm.name).toBe('AES-GCM');
-      expect(key.algorithm.length).toBe(256);
-    });
+  describe('saveTokens', () => {
+    test('トークンを平文で storage.local に保存する', async () => {
+      chrome.storage.local.set.mockImplementationOnce((items, cb) => cb());
 
-    test('毎回異なる鍵を生成する', async () => {
-      const key1 = await auth.generateEncryptionKey();
-      const key2 = await auth.generateEncryptionKey();
-      const raw1 = await crypto.subtle.exportKey('raw', key1);
-      const raw2 = await crypto.subtle.exportKey('raw', key2);
-      expect(Buffer.from(raw1).toString('hex')).not.toBe(Buffer.from(raw2).toString('hex'));
-    });
-  });
+      await auth.saveTokens(
+        'access_token_value',
+        'refresh_token_value',
+        'https://test.salesforce.com',
+        3600,
+        'test_client_id'
+      );
 
-  // ──────────────────────────────────────────
-  // encryptString / decryptString
-  // ──────────────────────────────────────────
-  describe('encryptString / decryptString', () => {
-    test('ASCII テキストの暗号化・復号ラウンドトリップ', async () => {
-      const key = await auth.generateEncryptionKey();
-      const plaintext = 'test-access-token-12345';
-      const { iv, ciphertext } = await auth.encryptString(key, plaintext);
-
-      expect(typeof iv).toBe('string');
-      expect(typeof ciphertext).toBe('string');
-      expect(ciphertext).not.toBe(plaintext);
-
-      const decrypted = await auth.decryptString(key, iv, ciphertext);
-      expect(decrypted).toBe(plaintext);
-    });
-
-    test('日本語テキストの暗号化・復号', async () => {
-      const key = await auth.generateEncryptionKey();
-      const plaintext = 'テストアクセストークン日本語';
-      const { iv, ciphertext } = await auth.encryptString(key, plaintext);
-      const decrypted = await auth.decryptString(key, iv, ciphertext);
-      expect(decrypted).toBe(plaintext);
-    });
-
-    test('同じ平文でも暗号化のたびに異なる IV を生成する', async () => {
-      const key = await auth.generateEncryptionKey();
-      const plaintext = 'same-plaintext';
-      const { iv: iv1 } = await auth.encryptString(key, plaintext);
-      const { iv: iv2 } = await auth.encryptString(key, plaintext);
-      expect(iv1).not.toBe(iv2);
-    });
-
-    test('誤った鍵で復号するとエラーになる', async () => {
-      const key1 = await auth.generateEncryptionKey();
-      const key2 = await auth.generateEncryptionKey();
-      const { iv, ciphertext } = await auth.encryptString(key1, 'secret');
-      await expect(auth.decryptString(key2, iv, ciphertext)).rejects.toThrow();
-    });
-  });
-
-  // ──────────────────────────────────────────
-  // getOrCreateEncryptionKey
-  // ──────────────────────────────────────────
-  describe('getOrCreateEncryptionKey', () => {
-    test('storage.session に鍵がなければ新規生成して保存する', async () => {
-      chrome.storage.session.get.mockImplementationOnce((keys, cb) => cb({}));
-      chrome.storage.session.set.mockImplementationOnce((items, cb) => cb());
-
-      const key = await auth.getOrCreateEncryptionKey();
-
-      expect(key).toBeDefined();
-      expect(key.type).toBe('secret');
-      expect(chrome.storage.session.set).toHaveBeenCalledWith(
-        expect.objectContaining({ encryption_key: expect.any(String) }),
+      expect(chrome.storage.local.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          access_token: 'access_token_value',
+          refresh_token: 'refresh_token_value',
+          instance_url: 'https://test.salesforce.com',
+          client_id: 'test_client_id',
+          token_expiry: expect.any(Number),
+        }),
         expect.any(Function)
       );
     });
 
-    test('storage.session に鍵があれば既存の鍵を復元する', async () => {
-      const originalKey = await auth.generateEncryptionKey();
-      const exported = await crypto.subtle.exportKey('raw', originalKey);
-      const exportedBase64 = btoa(String.fromCharCode(...new Uint8Array(exported)));
+    test('token_expiry は現在時刻 + expires_in 秒後になる', async () => {
+      chrome.storage.local.set.mockImplementationOnce((items, cb) => cb());
 
-      chrome.storage.session.get.mockImplementationOnce((keys, cb) => {
-        cb({ encryption_key: exportedBase64 });
-      });
+      const before = Date.now();
+      await auth.saveTokens('at', 'rt', 'https://test.salesforce.com', 3600, 'cid');
+      const after = Date.now();
 
-      const key = await auth.getOrCreateEncryptionKey();
-
-      expect(key).toBeDefined();
-      expect(key.type).toBe('secret');
-      expect(chrome.storage.session.set).not.toHaveBeenCalled();
+      const savedItems = chrome.storage.local.set.mock.calls[0][0];
+      expect(savedItems.token_expiry).toBeGreaterThanOrEqual(before + 3600 * 1000);
+      expect(savedItems.token_expiry).toBeLessThanOrEqual(after + 3600 * 1000);
     });
 
-    test('復元した鍵で正しく復号できる（ラウンドトリップ）', async () => {
-      const originalKey = await auth.generateEncryptionKey();
-      const { iv, ciphertext } = await auth.encryptString(originalKey, 'hello');
-
-      const exported = await crypto.subtle.exportKey('raw', originalKey);
-      const exportedBase64 = btoa(String.fromCharCode(...new Uint8Array(exported)));
-
-      chrome.storage.session.get.mockImplementationOnce((keys, cb) => {
-        cb({ encryption_key: exportedBase64 });
-      });
-
-      const restoredKey = await auth.getOrCreateEncryptionKey();
-      const decrypted = await auth.decryptString(restoredKey, iv, ciphertext);
-      expect(decrypted).toBe('hello');
+    test('chrome.storage.session を使用しない', async () => {
+      chrome.storage.local.set.mockImplementationOnce((items, cb) => cb());
+      await auth.saveTokens('at', 'rt', 'https://test.salesforce.com', 3600, 'cid');
+      expect(chrome.storage.session.set).not.toHaveBeenCalled();
+      expect(chrome.storage.session.get).not.toHaveBeenCalled();
     });
   });
 
@@ -125,15 +59,15 @@ describe('lib/auth.js', () => {
   // isConnected
   // ──────────────────────────────────────────
   describe('isConnected', () => {
-    test('instance_url が存在すれば true を返す', async () => {
+    test('access_token が存在すれば true を返す', async () => {
       chrome.storage.local.get.mockImplementationOnce((keys, cb) => {
-        cb({ instance_url: 'https://test.salesforce.com' });
+        cb({ access_token: 'some_token' });
       });
       const result = await auth.isConnected();
       expect(result).toBe(true);
     });
 
-    test('instance_url が存在しなければ false を返す', async () => {
+    test('access_token が存在しなければ false を返す', async () => {
       chrome.storage.local.get.mockImplementationOnce((keys, cb) => cb({}));
       const result = await auth.isConnected();
       expect(result).toBe(false);
@@ -168,13 +102,11 @@ describe('lib/auth.js', () => {
       await auth.disconnect();
       expect(chrome.storage.local.remove).toHaveBeenCalledWith(
         expect.arrayContaining([
-          'encrypted_access_token',
-          'encrypted_refresh_token',
+          'access_token',
+          'refresh_token',
           'instance_url',
           'token_expiry',
           'client_id',
-          'token_iv',
-          'refresh_iv',
         ]),
         expect.any(Function)
       );
@@ -182,41 +114,7 @@ describe('lib/auth.js', () => {
   });
 
   // ──────────────────────────────────────────
-  // saveTokens
-  // ──────────────────────────────────────────
-  describe('saveTokens', () => {
-    test('トークンを暗号化して storage.local に保存する', async () => {
-      const exportedBase64 = await _makeExportedKeyBase64();
-      chrome.storage.session.get.mockImplementation((keys, cb) => {
-        cb({ encryption_key: exportedBase64 });
-      });
-      chrome.storage.local.set.mockImplementationOnce((items, cb) => cb());
-
-      await auth.saveTokens(
-        'access_token_value',
-        'refresh_token_value',
-        'https://test.salesforce.com',
-        3600,
-        'test_client_id'
-      );
-
-      expect(chrome.storage.local.set).toHaveBeenCalledWith(
-        expect.objectContaining({
-          encrypted_access_token: expect.any(String),
-          encrypted_refresh_token: expect.any(String),
-          token_iv: expect.any(String),
-          refresh_iv: expect.any(String),
-          instance_url: 'https://test.salesforce.com',
-          client_id: 'test_client_id',
-          token_expiry: expect.any(Number),
-        }),
-        expect.any(Function)
-      );
-    });
-  });
-
-  // ──────────────────────────────────────────
-  // validateInstanceUrl (Fix 2)
+  // validateInstanceUrl
   // ──────────────────────────────────────────
   describe('validateInstanceUrl', () => {
     test('https://login.salesforce.com → true', () => {
@@ -265,9 +163,8 @@ describe('lib/auth.js', () => {
   // startOAuth
   // ──────────────────────────────────────────
   describe('startOAuth', () => {
-    test('launchWebAuthFlow を呼び出し、コードを交換してトークンを保存する', async () => {
+    test('launchWebAuthFlow を呼び出し、コードを交換してトークンを平文保存する', async () => {
       chrome.identity.launchWebAuthFlow.mockImplementationOnce((params, cb) => {
-        // 送信された authUrl から state を取得し、同じ state を返す
         const authUrl = new URL(params.url);
         const state = authUrl.searchParams.get('state');
         cb(`https://test.chromiumapp.org/oauth?code=AUTH_CODE_123&state=${encodeURIComponent(state)}`);
@@ -283,8 +180,6 @@ describe('lib/auth.js', () => {
         }),
       });
 
-      chrome.storage.session.get.mockImplementation((keys, cb) => cb({}));
-      chrome.storage.session.set.mockImplementation((items, cb) => cb());
       chrome.storage.local.set.mockImplementation((items, cb) => cb());
 
       await auth.startOAuth('test_client_id', 'https://login.salesforce.com');
@@ -297,7 +192,16 @@ describe('lib/auth.js', () => {
         expect.any(Function)
       );
       expect(global.fetch).toHaveBeenCalled();
-      expect(chrome.storage.local.set).toHaveBeenCalled();
+      // 平文で保存されることを確認
+      expect(chrome.storage.local.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          access_token: 'mock_access_token',
+          refresh_token: 'mock_refresh_token',
+        }),
+        expect.any(Function)
+      );
+      // session storage を使用しないことを確認
+      expect(chrome.storage.session.set).not.toHaveBeenCalled();
     });
 
     test('OAuth フローがキャンセルされたらエラーをスローする', async () => {
@@ -330,14 +234,9 @@ describe('lib/auth.js', () => {
     });
 
     test('OAuth state が不一致の場合エラーをスローする (CSRF防止)', async () => {
-      // state パラメータが異なるリダイレクト URL を返す
       chrome.identity.launchWebAuthFlow.mockImplementationOnce((params, cb) => {
-        // 元の URL から state を取得し、異なる state でリダイレクト
         cb('https://test.chromiumapp.org/oauth?code=AUTH_CODE_123&state=WRONG_STATE');
       });
-
-      chrome.storage.session.get.mockImplementation((keys, cb) => cb({}));
-      chrome.storage.session.set.mockImplementation((items, cb) => cb());
 
       await expect(
         auth.startOAuth('test_client_id', 'https://login.salesforce.com')
@@ -367,17 +266,11 @@ describe('lib/auth.js', () => {
   // ──────────────────────────────────────────
   describe('getValidToken', () => {
     test('有効期限内のトークンをそのまま返す', async () => {
-      const { key, exportedBase64 } = await _makeKeyWithExport();
-      const { iv, ciphertext } = await auth.encryptString(key, 'valid_access_token');
       const futureExpiry = Date.now() + 10 * 60 * 1000;
 
-      chrome.storage.session.get.mockImplementation((keys, cb) => {
-        cb({ encryption_key: exportedBase64 });
-      });
       chrome.storage.local.get.mockImplementationOnce((keys, cb) => {
         cb({
-          encrypted_access_token: ciphertext,
-          token_iv: iv,
+          access_token: 'valid_access_token',
           token_expiry: futureExpiry,
           instance_url: 'https://test.salesforce.com',
         });
@@ -387,54 +280,42 @@ describe('lib/auth.js', () => {
       expect(token).toBe('valid_access_token');
     });
 
-    test('SW 再起動でセッションキーが消えた場合はセッション切れエラーをスローする', async () => {
-      // session に key なし → SW 再起動後の状態をシミュレート
-      chrome.storage.session.get.mockImplementation((keys, cb) => cb({}));
+    test('ブラウザ再起動後（session なし）も access_token を返せる', async () => {
+      const futureExpiry = Date.now() + 60 * 60 * 1000;
 
-      await expect(auth.getValidToken()).rejects.toThrow(
-        'セッションが切れました。ポップアップから再接続してください'
-      );
+      chrome.storage.local.get.mockImplementationOnce((keys, cb) => {
+        cb({
+          access_token: 'persisted_token',
+          token_expiry: futureExpiry,
+        });
+      });
+
+      const token = await auth.getValidToken();
+      expect(token).toBe('persisted_token');
+      // session storage を参照していないことを確認（再起動後も動作する）
+      expect(chrome.storage.session.get).not.toHaveBeenCalled();
     });
 
     test('トークンが未保存の場合はエラーをスローする', async () => {
-      // session に key あり・local に token なし → 接続前の状態
-      const { exportedBase64 } = await _makeKeyWithExport();
-      chrome.storage.session.get.mockImplementation((keys, cb) => cb({ encryption_key: exportedBase64 }));
       chrome.storage.local.get.mockImplementationOnce((keys, cb) => cb({}));
 
       await expect(auth.getValidToken()).rejects.toThrow('Not authenticated');
     });
 
-    test('5分以内に期限切れになるトークンはリフレッシュする', async () => {
-      const { key, exportedBase64 } = await _makeKeyWithExport();
-      const { iv: accessIv, ciphertext: accessCt } = await auth.encryptString(
-        key, 'expiring_token'
-      );
-      const { iv: refreshIv, ciphertext: refreshCt } = await auth.encryptString(
-        key, 'refresh_token_value'
-      );
+    test('5分以内に期限切れになるトークンは自動リフレッシュする', async () => {
       const nearExpiry = Date.now() + 2 * 60 * 1000; // 2分後（5分バッファ内）
 
-      // session.get は常に同じ鍵を返す
-      chrome.storage.session.get.mockImplementation((keys, cb) => {
-        cb({ encryption_key: exportedBase64 });
-      });
-
-      // 1回目: getValidToken 内のトークン取得
-      // 2回目: refreshAccessToken 内のリフレッシュトークン取得
       chrome.storage.local.get
         .mockImplementationOnce((keys, cb) => {
           cb({
-            encrypted_access_token: accessCt,
-            token_iv: accessIv,
+            access_token: 'expiring_token',
             token_expiry: nearExpiry,
             instance_url: 'https://test.salesforce.com',
           });
         })
         .mockImplementationOnce((keys, cb) => {
           cb({
-            encrypted_refresh_token: refreshCt,
-            refresh_iv: refreshIv,
+            refresh_token: 'refresh_token_value',
             instance_url: 'https://test.salesforce.com',
             client_id: 'test_client',
           });
@@ -462,8 +343,6 @@ describe('lib/auth.js', () => {
   // ──────────────────────────────────────────
   describe('refreshAccessToken', () => {
     test('リフレッシュトークンがなければエラーをスローする', async () => {
-      chrome.storage.session.get.mockImplementation((keys, cb) => cb({}));
-      chrome.storage.session.set.mockImplementation((items, cb) => cb());
       chrome.storage.local.get.mockImplementationOnce((keys, cb) => cb({}));
 
       await expect(auth.refreshAccessToken()).rejects.toThrow(
@@ -472,18 +351,9 @@ describe('lib/auth.js', () => {
     });
 
     test('リフレッシュ API が失敗したらエラーをスローする', async () => {
-      const { key, exportedBase64 } = await _makeKeyWithExport();
-      const { iv: refreshIv, ciphertext: refreshCt } = await auth.encryptString(
-        key, 'refresh_token_value'
-      );
-
-      chrome.storage.session.get.mockImplementation((keys, cb) => {
-        cb({ encryption_key: exportedBase64 });
-      });
       chrome.storage.local.get.mockImplementationOnce((keys, cb) => {
         cb({
-          encrypted_refresh_token: refreshCt,
-          refresh_iv: refreshIv,
+          refresh_token: 'refresh_token_value',
           instance_url: 'https://test.salesforce.com',
           client_id: 'test_client',
         });
@@ -496,25 +366,69 @@ describe('lib/auth.js', () => {
 
       await expect(auth.refreshAccessToken()).rejects.toThrow('Token refresh failed');
     });
+
+    test('リフレッシュ成功後、新しいトークンを storage.local に平文保存する', async () => {
+      chrome.storage.local.get.mockImplementationOnce((keys, cb) => {
+        cb({
+          refresh_token: 'old_refresh_token',
+          instance_url: 'https://test.salesforce.com',
+          client_id: 'test_client',
+        });
+      });
+
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          access_token: 'new_access_token',
+          refresh_token: 'new_refresh_token',
+          instance_url: 'https://test.salesforce.com',
+          expires_in: 3600,
+        }),
+      });
+
+      chrome.storage.local.set.mockImplementation((items, cb) => cb());
+
+      const token = await auth.refreshAccessToken();
+      expect(token).toBe('new_access_token');
+      expect(chrome.storage.local.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          access_token: 'new_access_token',
+          refresh_token: 'new_refresh_token',
+        }),
+        expect.any(Function)
+      );
+      // session storage を使用しないことを確認
+      expect(chrome.storage.session.set).not.toHaveBeenCalled();
+    });
+
+    test('リフレッシュレスポンスに refresh_token がない場合は旧トークンを維持する', async () => {
+      chrome.storage.local.get.mockImplementationOnce((keys, cb) => {
+        cb({
+          refresh_token: 'existing_refresh_token',
+          instance_url: 'https://test.salesforce.com',
+          client_id: 'test_client',
+        });
+      });
+
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          access_token: 'new_access_token',
+          // refresh_token なし（Salesforce は毎回返さない場合がある）
+          instance_url: 'https://test.salesforce.com',
+          expires_in: 3600,
+        }),
+      });
+
+      chrome.storage.local.set.mockImplementation((items, cb) => cb());
+
+      await auth.refreshAccessToken();
+      expect(chrome.storage.local.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          refresh_token: 'existing_refresh_token', // 旧トークンを維持
+        }),
+        expect.any(Function)
+      );
+    });
   });
 });
-
-// ──────────────────────────────────────────
-// ヘルパー
-// ──────────────────────────────────────────
-async function _makeExportedKeyBase64() {
-  const key = await crypto.subtle.generateKey(
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt']
-  );
-  const exported = await crypto.subtle.exportKey('raw', key);
-  return btoa(String.fromCharCode(...new Uint8Array(exported)));
-}
-
-async function _makeKeyWithExport() {
-  const key = await auth.generateEncryptionKey();
-  const exported = await crypto.subtle.exportKey('raw', key);
-  const exportedBase64 = btoa(String.fromCharCode(...new Uint8Array(exported)));
-  return { key, exportedBase64 };
-}
