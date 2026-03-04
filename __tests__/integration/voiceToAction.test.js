@@ -6,6 +6,7 @@ const { resolve, RESULT_CATEGORY }         = require('../../lib/recordResolver')
 const { createWidget, STATES }             = require('../../ui/widget');
 const { createCandidateList }              = require('../../ui/candidateList');
 const { OBJECT_DISPLAY_FIELDS }            = require('../../lib/salesforceApi');
+const { validateLLMOutput, resolveIntent } = require('../../lib/intentResolver');
 
 const INSTANCE_URL = 'https://example.lightning.force.com';
 
@@ -282,6 +283,82 @@ describe('音声→アクション統合テスト', () => {
 
       w.destroy();
       jest.useRealTimers();
+    });
+  });
+
+  // ── LLM フォールバック（#76）─────────────────────────────────────────────
+  describe('LLMフォールバック（#76）', () => {
+    const WORKER_URL = 'https://voiceforce-worker.iwasatat0107.workers.dev';
+    const USER_ID    = 'ext-test-user';
+
+    beforeEach(() => {
+      global.fetch = jest.fn();
+    });
+
+    afterEach(() => {
+      jest.resetAllMocks();
+    });
+
+    test('ruleEngine が null → resolveIntent を呼び出し navigate レスポンスを受け取る', async () => {
+      const llmResponse = { action: 'navigate', target: 'list', object: 'Opportunity', confidence: 0.92, message: '商談一覧を開きます' };
+      global.fetch.mockResolvedValueOnce({ ok: true, json: async () => llmResponse });
+
+      const result = await resolveIntent('パイプラインを見せて', '', WORKER_URL, USER_ID);
+      expect(result.action).toBe('navigate');
+      expect(result.object).toBe('Opportunity');
+      expect(validateLLMOutput(result, null)).toBe(true);
+    });
+
+    test('resolveIntent が search レスポンスを返す → validateLLMOutput が true を返す', async () => {
+      const llmResponse = { action: 'search', object: 'Account', search_term: '田中商事', confidence: 0.88 };
+      global.fetch.mockResolvedValueOnce({ ok: true, json: async () => llmResponse });
+
+      const result = await resolveIntent('田中商事を調べて', '', WORKER_URL, USER_ID);
+      expect(validateLLMOutput(result, null)).toBe(true);
+      expect(result.search_term).toBe('田中商事');
+    });
+
+    test('resolveIntent が unknown レスポンスを返す → validateLLMOutput が true を返す', async () => {
+      const llmResponse = { action: 'unknown', confidence: 0.1, message: '操作を認識できませんでした' };
+      global.fetch.mockResolvedValueOnce({ ok: true, json: async () => llmResponse });
+
+      const result = await resolveIntent('今日の天気は？', '', WORKER_URL, USER_ID);
+      expect(validateLLMOutput(result, null)).toBe(true);
+      expect(result.action).toBe('unknown');
+    });
+
+    test('LLM が不正なaction（"delete"）を返した場合 validateLLMOutput が false を返す', async () => {
+      const injectedResponse = { action: 'delete', object: 'Account', confidence: 0.9 };
+      global.fetch.mockResolvedValueOnce({ ok: true, json: async () => injectedResponse });
+
+      const result = await resolveIntent('テスト', '', WORKER_URL, USER_ID);
+      expect(validateLLMOutput(result, null)).toBe(false);
+    });
+
+    test('Worker が 429 を返した場合エラーに .status=429 が付与される', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: false, status: 429,
+        json: async () => ({ error: 'Rate limit exceeded. Please try again later.' }),
+      });
+
+      let err;
+      try { await resolveIntent('テスト', '', WORKER_URL, USER_ID); }
+      catch (e) { err = e; }
+      expect(err).toBeDefined();
+      expect(err.status).toBe(429);
+    });
+
+    test('ネットワークエラー時は Error がスローされる', async () => {
+      global.fetch.mockRejectedValueOnce(new Error('fetch failed'));
+      await expect(resolveIntent('テスト', '', WORKER_URL, USER_ID))
+        .rejects.toThrow('fetch failed');
+    });
+
+    test('LLMフォールバックの入口: ruleEngine が null を返す発話の確認', () => {
+      // これらの発話は ruleEngine ではハンドルできない → LLM フォールバックへ
+      expect(match('今月のパイプラインを教えて')).toBeNull();
+      expect(match('山田さんの商談を更新して')).toBeNull();
+      expect(match('')).toBeNull();
     });
   });
 
