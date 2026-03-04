@@ -89,7 +89,3 @@ document.getElementById('customize-shortcut-btn').addEventListener('click', () =
   chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
 });
 
-// セットアップガイドを GitHub で開く
-document.getElementById('open-guide-btn').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'https://github.com/iwasatat0107/voiceforce/blob/main/docs/setup-guide.md' });
-});
